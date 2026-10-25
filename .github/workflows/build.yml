@@ -4,110 +4,84 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 
 permissions:
-  contents: write
-  packages: write
+  contents: read
+
+concurrency:
+  group: build-release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build:
+    name: Build ${{ matrix.platform }}-${{ matrix.arch }}
     runs-on: ${{ matrix.os }}
-    
+    timeout-minutes: 30
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: windows-latest
             platform: win32
             arch: x64
-    
+            targets: '@electron-forge/maker-squirrel,@electron-forge/maker-zip'
+          - os: macos-14
+            platform: darwin
+            arch: arm64
+            targets: '@electron-forge/maker-dmg,@electron-forge/maker-zip'
+          - os: macos-15-intel
+            platform: darwin
+            arch: x64
+            targets: '@electron-forge/maker-dmg,@electron-forge/maker-zip'
     steps:
-      - name: Check out Git repository
-        uses: actions/checkout@v4
-
-      - name: Install Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: 18
-          cache: 'npm'
-
+          node-version: 22
+          cache: npm
       - name: Install dependencies
         run: npm ci
-        
-      - name: Build (Windows)
-        if: matrix.platform == 'win32'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "=== Building for Windows ==="
-          npm run make
-          echo "=== Windows build completed ==="
-        
-      - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v4
+      - name: Build installers
+        run: npm run make -- --platform=${{ matrix.platform }} --arch=${{ matrix.arch }} --targets=${{ matrix.targets }}
+      - name: Prepare release assets
+        run: node scripts/prepare-release.cjs ${{ matrix.platform }} ${{ matrix.arch }}
+      - uses: actions/upload-artifact@v4
         with:
-          name: build-windows-x64
-          path: out/make/
-          
+          name: build-${{ matrix.platform }}-${{ matrix.arch }}
+          path: release/
+          if-no-files-found: error
+
   release:
+    name: Publish installers
     needs: build
-    runs-on: ubuntu-latest
     if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write
-      packages: write
-      actions: read
-      id-token: write
-    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        
-      - name: Download Windows Artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
         with:
-          name: build-windows-x64
-          path: ./artifacts/win32/
-          
-      - name: Create GitHub Release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          pattern: build-*
+          merge-multiple: true
+          path: release/
+      - name: Generate checksums
+        working-directory: release
         run: |
-          set -e  # 遇到错误立即退出
-          
-          # 检查release是否已存在
-          echo "=== Checking if release already exists ==="
-          if gh release view "${{ github.ref_name }}" >/dev/null 2>&1; then
-            echo "Release ${{ github.ref_name }} already exists, deleting it first..."
-            gh release delete "${{ github.ref_name }}" --yes --cleanup-tag || true
-            echo "Existing release and tag deleted"
-            sleep 2  # 等待GitHub API同步
+          sha256sum * > ../SHA256SUMS
+          mv ../SHA256SUMS .
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" release/* --clobber
+          else
+            gh release create "$RELEASE_TAG" release/* \
+              --verify-tag \
+              --title "LocalSqueeze $RELEASE_TAG" \
+              --notes-file RELEASE_NOTES.md
           fi
-          
-          # 收集Windows发布文件
-          find ./artifacts -type f \( -name "*.exe" -o -name "*.msi" -o -name "*.zip" \) > /tmp/files.txt
-          
-          if [ ! -s /tmp/files.txt ]; then
-            echo "❌ No release files found!"
-            exit 1
-          fi
-          
-          # 验证文件是否可读
-          while IFS= read -r file; do
-            if [ ! -f "$file" ] || [ ! -r "$file" ]; then
-              echo "❌ Cannot access file: $file"
-              exit 1
-            fi
-          done < /tmp/files.txt
-          
-          # 创建GitHub Release
-          # 先创建release（不上传文件）
-          gh release create "${{ github.ref_name }}" \
-            --draft \
-            --generate-notes \
-            --title "Release ${{ github.ref_name }}" \
-            --notes "Automated release for version ${{ github.ref_name }}"
-          
-          # 然后逐个上传文件，使用--clobber参数
-          while IFS= read -r file; do
-            gh release upload "${{ github.ref_name }}" "$file" --clobber
-          done < /tmp/files.txt

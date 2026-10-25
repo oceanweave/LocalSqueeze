@@ -85,7 +85,7 @@ const config: ForgeConfig = {
   publishers: [
     new PublisherGithub({
       repository: {
-        owner: 'freeany',
+        owner: 'oceanweave',
         name: 'LocalSqueeze'
       },
       prerelease: process.env.NODE_ENV !== 'production',
