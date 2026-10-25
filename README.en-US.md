@@ -23,6 +23,7 @@
 - **🚀 Batch Processing** - Process multiple images simultaneously to improve work efficiency
 - **📋 Paste to Compress** - Press Ctrl+V (Windows/Linux) or ⌘V (macOS) on Home or Image Processing to compress clipboard images and screenshots using your current settings; additional pastes queue while compression is running
 - **🎯 Optional Size Target** - Set a per-image limit such as 200 KB; the app measures encoded bytes, adjusts quality and colors, and can resize proportionally when allowed. Unmet targets are explicitly reported.
+- **🎨 PNG Color Mode** - Color reduction is recommended by default for smaller files. Choose color preservation to retain existing colors and smooth gradients, typically with smaller size savings. Size targets also respect this choice.
 - **🎨 Experience First**: Intuitive interface design with smooth operation experience
 - **🔧 Flexible Configuration**: Rich compression parameters to meet professional user needs
 - **🌍 Cross-Platform**: Supports Windows, macOS mainstream platforms

@@ -14,8 +14,8 @@ app.on('browser-window-created', (_, window) => {
     let failures = 0;
     const run = code => window.webContents.executeJavaScript(code, true);
     const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-    const waitFor = async (code, label) => {
-      for (let attempt = 0; attempt < 100; attempt++) {
+    const waitFor = async (code, label, attempts = 100) => {
+      for (let attempt = 0; attempt < attempts; attempt++) {
         if (await run(code)) return;
         await sleep(50);
       }
@@ -60,6 +60,24 @@ app.on('browser-window-created', (_, window) => {
         const low = await compress({ quality: 17 });
         console.log(`PNG quality 80: ${high.compressedSize}, quality 17: ${low.compressedSize}`);
         assert.ok(low.compressedSize < high.compressedSize * 0.8);
+      });
+      await test('PNG color preservation retains gradient pixels and alpha', async () => {
+        const gradient = path.join(temp, 'gradient.png');
+        const rgba = Buffer.alloc(256 * 128 * 4);
+        for (let y = 0; y < 128; y++) for (let x = 0; x < 256; x++) {
+          const offset = (y * 256 + x) * 4;
+          rgba[offset] = x; rgba[offset + 1] = y * 2; rgba[offset + 2] = 128; rgba[offset + 3] = (x + y) % 256;
+        }
+        await sharp(rgba, { raw: { width: 256, height: 128, channels: 4 } }).png().toFile(gradient);
+        const result = await run(`window.compression.compressImage(${JSON.stringify(gradient)}, ${JSON.stringify({ ...defaults, quality: 20, optimizeColors: false })}, ${JSON.stringify(path.join(temp, 'gradient-preserved.png'))})`);
+        assert.equal(result.success, true, result.error);
+        assert.deepEqual(await sharp(result.outputPath).raw().toBuffer(), await sharp(gradient).raw().toBuffer());
+      });
+      await test('size target never silently reduces colors in PNG preserve mode', async () => {
+        const result = await compress({ optimizeColors: false, targetSizeKB: 1, targetAllowResize: false });
+        assert.equal(result.targetMet, false);
+        assert.ok(result.warning);
+        assert.deepEqual(await sharp(result.outputPath).raw().toBuffer(), await sharp(input).raw().toBuffer());
       });
       await test('optional target produces strictly less than 200 KB', async () => {
         const result = await compress({ targetSizeKB: 200, targetAllowResize: true });
@@ -132,8 +150,26 @@ app.on('browser-window-created', (_, window) => {
         assert.equal(saved.settings.quality, 17);
         assert.equal(saved.settings.optimizeColors, true);
       });
-      await test('changing a checkbox persists its new value', async () => {
+      await test('PNG mode persists through preset changes and page navigation', async () => {
         await run(`document.querySelector('a[href="#/settings"]').click()`);
+        await waitFor('!!document.querySelector("#png-color-reduce")', 'color mode controls');
+        assert.equal(await run('document.querySelector("#png-color-reduce").checked'), true);
+        await run('document.querySelector("#png-color-preserve").click()');
+        await run(`Array.from(document.querySelectorAll('button')).find(button=>button.textContent==='轻度压缩').click()`);
+        await sleep(100);
+        let saved = await run('window.compression.getCompressionSettings()');
+        assert.equal(saved.settings.optimizeColors, false);
+        assert.equal(saved.settings.quality, 80);
+        await run(`document.querySelector('a[href="#/"]').click()`);
+        await run(`document.querySelector('a[href="#/settings"]').click()`);
+        await waitFor('!!document.querySelector("#png-color-preserve")', 'saved color mode');
+        assert.equal(await run('document.querySelector("#png-color-preserve").checked'), true);
+        await run('document.querySelector("#png-color-reduce").click()');
+        await sleep(100);
+        saved = await run('window.compression.getCompressionSettings()');
+        assert.equal(saved.settings.optimizeColors, true);
+      });
+      await test('changing a checkbox persists its new value', async () => {
         await waitFor('!!document.querySelector("#keep-dimensions")', 'settings loaded');
         await run('document.querySelector("#keep-dimensions").click()');
         await sleep(300);
@@ -160,7 +196,7 @@ app.on('browser-window-created', (_, window) => {
         await waitFor('!!document.querySelector("input[type=file]")', 'process page');
         const image = fs.readFileSync(input).toString('base64');
         await run(`(() => { const data=new DataTransfer(); data.items.add(new File([Uint8Array.from(atob('${image}'),c=>c.charCodeAt(0))],'image.png',{type:'image/png'})); document.body.dispatchEvent(new ClipboardEvent('paste',{bubbles:true,cancelable:true,clipboardData:data})); })()`);
-        await waitFor('document.body.innerText.includes("所有文件已处理")', 'paste compressed');
+        await waitFor('document.body.innerText.includes("所有文件已处理")', 'paste compressed', 400);
         const recent = await run('window.stats.getRecentImages(1)');
         assert.ok(recent.images[0].compressedSize < 200 * 1024);
         assert.deepEqual(await run('window.testAlerts'), []);

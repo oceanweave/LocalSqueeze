@@ -42,7 +42,8 @@ export async function encodeImage(inputPath: string, outputPath: string, setting
       image = image.resize({ width: w, height: h, fit: settings.keepRatio === false ? 'fill' : 'inside', withoutEnlargement: true });
       switch (format) {
         case 'png': {
-          const palette = settings.optimizeColors || limit !== undefined;
+          // Explicit color preservation also applies when a size target is enabled.
+          const palette = settings.optimizeColors;
           image = image.png({ compressionLevel: 9, adaptiveFiltering: true, palette,
             ...(palette ? { quality: q, colours: Math.max(2, Math.round(2 + 254 * Math.pow(q / 100, 1.6))), dither: 0 } : {}) });
           break;

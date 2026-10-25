@@ -82,8 +82,7 @@ export default function CompressionSettings() {
           {presets.map(preset => (
             <button key={preset.value} aria-pressed={settings.preset === preset.value}
               className={'px-4 py-2 rounded-md border ' + (settings.preset === preset.value ? 'border-primary text-primary bg-primary/10' : 'border-border hover:bg-accent')}
-              onClick={() => update({ preset: preset.value, quality: preset.quality,
-                optimizeColors: true, removeMetadata: true }, false)}>
+              onClick={() => update({ preset: preset.value, quality: preset.quality }, false)}>
               {preset.name}
             </button>
           ))}
@@ -99,8 +98,40 @@ export default function CompressionSettings() {
               className="flex-1 accent-primary" />
             <span className="font-medium w-20 text-right">{100 - settings.quality} / 100</span>
           </div>
-          <p className="text-sm text-muted-foreground mt-2">强度越高，质量或颜色保留越少；这个数值不是文件体积缩减百分比，实际体积取决于图片内容与格式。</p>
+          <p className="text-sm text-muted-foreground mt-2">{settings.optimizeColors
+            ? '强度越高，质量或颜色保留越少；这个数值不是文件体积缩减百分比，实际体积取决于图片内容与格式。'
+            : 'PNG 保色优化不按强度减少颜色；JPEG、WebP 仍按强度调整质量。强度不是文件体积缩减百分比。'}</p>
         </div>
+      </section>
+
+      <section className={cardClass} aria-labelledby="png-color-mode-title">
+        <h2 id="png-color-mode-title" className="text-xl font-semibold">PNG 压缩方式</h2>
+        <div role="radiogroup" aria-labelledby="png-color-mode-title" className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+          <label className={'flex items-start gap-3 rounded-lg border p-4 cursor-pointer ' +
+            (settings.optimizeColors ? 'border-primary bg-primary/5' : 'border-border hover:bg-accent')}>
+            <input id="png-color-reduce" name="png-color-mode" type="radio" value="reduce"
+              checked={settings.optimizeColors} onChange={() => update({ optimizeColors: true }, false)}
+              className="accent-primary mt-1" />
+            <span>
+              <span className="flex flex-wrap items-center gap-2 font-medium">
+                减色压缩
+                <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">默认推荐</span>
+              </span>
+              <span className="block text-sm text-muted-foreground mt-2">通过减少颜色数量，体积通常缩小明显，适合截图和日常分享；部分颜色或渐变细节可能改变。</span>
+            </span>
+          </label>
+          <label className={'flex items-start gap-3 rounded-lg border p-4 cursor-pointer ' +
+            (!settings.optimizeColors ? 'border-primary bg-primary/5' : 'border-border hover:bg-accent')}>
+            <input id="png-color-preserve" name="png-color-mode" type="radio" value="preserve"
+              checked={!settings.optimizeColors} onChange={() => update({ optimizeColors: false }, false)}
+              className="accent-primary mt-1" />
+            <span>
+              <span className="font-medium">保色优化</span>
+              <span className="block text-sm text-muted-foreground mt-2">不主动减少颜色数量，保留原有渐变层次与平滑过渡；体积缩减通常较少，适合更重视色彩和渐变的图片。</span>
+            </span>
+          </label>
+        </div>
+        <p className="text-sm text-muted-foreground">仅影响 PNG 输出。JPEG、WebP 等格式按各自的质量参数压缩；切换轻度、中度或高度压缩会保留这里的选择。</p>
       </section>
 
       <section className={cardClass}>
@@ -128,7 +159,9 @@ export default function CompressionSettings() {
             className="accent-primary" />
           必要时允许自动按比例缩小尺寸
         </label>
-        <p className="text-sm text-muted-foreground">开启后先调整质量与颜色，并检查实际文件字节数；仍超标且允许缩小时，会覆盖“保持原始尺寸”按比例缩小。未达到目标会明确提示。1 KB = 1024 字节。</p>
+        <p className="text-sm text-muted-foreground">{settings.optimizeColors
+          ? '开启后先调整质量与颜色，并检查实际文件字节数。'
+          : 'PNG 保色优化下不会为了满足目标而减色。'}仍超标且允许缩小时，会覆盖“保持原始尺寸”按比例缩小。未达到目标会明确提示。1 KB = 1024 字节。</p>
         {!settings.targetEnabled && <p className="text-sm text-muted-foreground">未开启：使用常规压缩参数，不限制输出体积。</p>}
         {invalidTarget && <p role="alert" className="text-amber-700">目标体积至少为 1 KB。</p>}
       </section>
@@ -149,7 +182,7 @@ export default function CompressionSettings() {
             </button>
           ))}
         </div>
-        <p className="text-sm text-muted-foreground">WebP 通常能更有效地减小截图体积；PNG 颜色优化会减少色数，照片可选 JPEG。JPEG 不支持透明，透明区域将转为白色。点击格式即可切换输出。</p>
+        <p className="text-sm text-muted-foreground">PNG 可选减色压缩或保色优化；WebP 和 JPEG 通过质量参数控制体积，JPEG 不支持透明，透明区域将转为白色。点击格式即可切换输出。</p>
       </section>
 
       <section className={cardClass}>
@@ -181,12 +214,6 @@ export default function CompressionSettings() {
             onChange={event => update({ removeMetadata: event.target.checked })} className="accent-primary" />
           移除 EXIF、ICC 等元数据
         </label>
-        <label className="flex items-center gap-2">
-          <input id="optimize-colors" type="checkbox" checked={settings.optimizeColors}
-            onChange={event => update({ optimizeColors: event.target.checked })} className="accent-primary" />
-          优化 PNG 颜色（有损，压缩强度越高保留的颜色越少）
-        </label>
-        <p className="text-sm text-muted-foreground">未启用颜色优化时，常规 PNG 压缩保留颜色，调整强度可能不会明显改变体积。目标体积模式会自动优化颜色。</p>
         <label className="flex items-center gap-2">
           <input id="progressive" type="checkbox" checked={settings.progressive}
             onChange={event => update({ progressive: event.target.checked })} className="accent-primary" />
