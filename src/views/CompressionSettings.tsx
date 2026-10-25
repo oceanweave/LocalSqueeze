@@ -31,6 +31,7 @@ export default function CompressionSettings() {
     (!Number.isFinite(settings.targetSizeKB) || settings.targetSizeKB < 1);
   const invalidDimensions = !settings.keepDimensions &&
     (!Number.isFinite(settings.width) || !Number.isFinite(settings.height) || settings.width < 1 || settings.height < 1);
+  const pngModeUnavailable = !settings.keepFormat && settings.outputFormat !== 'png';
 
   useEffect(() => {
     if (loading || loadError) return;
@@ -106,10 +107,29 @@ export default function CompressionSettings() {
 
       <section className={cardClass} aria-labelledby="png-color-mode-title">
         <h2 id="png-color-mode-title" className="text-xl font-semibold">PNG 压缩方式</h2>
-        <div role="radiogroup" aria-labelledby="png-color-mode-title" className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-          <label className={'flex items-start gap-3 rounded-lg border p-4 cursor-pointer ' +
+        <div id="png-color-scope" role="status" className={'rounded-lg border p-3 text-sm ' +
+          (pngModeUnavailable ? 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200' : 'border-primary/20 bg-primary/5')}>
+          <p className="font-medium">{pngModeUnavailable
+            ? '当前输出为 ' + settings.outputFormat.toUpperCase() + '：减色／保色选项不生效。'
+            : settings.keepFormat
+              ? '当前保持原始格式：减色／保色仅对 PNG 原图生效。'
+              : '当前输出为 PNG：减色／保色选项会生效。'}</p>
+          <p className="mt-1">{settings.keepFormat
+            ? 'JPEG、WebP、GIF 等原图不受此选项影响。如需使用，请将输出格式设为 PNG。'
+            : pngModeUnavailable
+              ? '这两个选项仅影响 PNG 输出。JPEG、WebP、GIF 等输出格式不会因切换此项而改变压缩结果。'
+              : '无论原图是 PNG、JPEG 还是 WebP，转换为 PNG 输出后都会使用这里的选择。'}</p>
+          {(pngModeUnavailable || settings.keepFormat) && (
+            <button onClick={() => update({ keepFormat: false, outputFormat: 'png' }, false)}
+              className="mt-3 px-3 py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90">改为 PNG 输出</button>
+          )}
+        </div>
+        <div role="radiogroup" aria-labelledby="png-color-mode-title" aria-describedby="png-color-scope"
+          aria-disabled={pngModeUnavailable} className={'grid grid-cols-1 xl:grid-cols-2 gap-3 ' + (pngModeUnavailable ? 'opacity-50' : '')}>
+          <label className={'flex items-start gap-3 rounded-lg border p-4 ' + (pngModeUnavailable ? 'cursor-not-allowed ' : 'cursor-pointer ') +
             (settings.optimizeColors ? 'border-primary bg-primary/5' : 'border-border hover:bg-accent')}>
             <input id="png-color-reduce" name="png-color-mode" type="radio" value="reduce"
+              disabled={pngModeUnavailable}
               checked={settings.optimizeColors} onChange={() => update({ optimizeColors: true }, false)}
               className="accent-primary mt-1" />
             <span>
@@ -120,9 +140,10 @@ export default function CompressionSettings() {
               <span className="block text-sm text-muted-foreground mt-2">通过减少颜色数量，体积通常缩小明显，适合截图和日常分享；部分颜色或渐变细节可能改变。</span>
             </span>
           </label>
-          <label className={'flex items-start gap-3 rounded-lg border p-4 cursor-pointer ' +
+          <label className={'flex items-start gap-3 rounded-lg border p-4 ' + (pngModeUnavailable ? 'cursor-not-allowed ' : 'cursor-pointer ') +
             (!settings.optimizeColors ? 'border-primary bg-primary/5' : 'border-border hover:bg-accent')}>
             <input id="png-color-preserve" name="png-color-mode" type="radio" value="preserve"
+              disabled={pngModeUnavailable}
               checked={!settings.optimizeColors} onChange={() => update({ optimizeColors: false }, false)}
               className="accent-primary mt-1" />
             <span>
@@ -131,7 +152,7 @@ export default function CompressionSettings() {
             </span>
           </label>
         </div>
-        <p className="text-sm text-muted-foreground">仅影响 PNG 输出。JPEG、WebP 等格式按各自的质量参数压缩；切换轻度、中度或高度压缩会保留这里的选择。</p>
+        <p className="text-sm text-muted-foreground">切换轻度、中度或高度压缩会保留这里的选择；切回 PNG 输出后会恢复生效。</p>
       </section>
 
       <section className={cardClass}>
