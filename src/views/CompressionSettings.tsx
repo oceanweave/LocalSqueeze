@@ -31,7 +31,7 @@ export default function CompressionSettings() {
     (!Number.isFinite(settings.targetSizeKB) || settings.targetSizeKB < 1);
   const invalidDimensions = !settings.keepDimensions &&
     (!Number.isFinite(settings.width) || !Number.isFinite(settings.height) || settings.width < 1 || settings.height < 1);
-  const pngModeUnavailable = !settings.keepFormat && settings.outputFormat !== 'png';
+  const showPngOptions = settings.keepFormat || settings.outputFormat === 'png';
 
   useEffect(() => {
     if (loading || loadError) return;
@@ -105,55 +105,6 @@ export default function CompressionSettings() {
         </div>
       </section>
 
-      <section className={cardClass} aria-labelledby="png-color-mode-title">
-        <h2 id="png-color-mode-title" className="text-xl font-semibold">PNG 压缩方式</h2>
-        <div id="png-color-scope" role="status" className={'rounded-lg border p-3 text-sm ' +
-          (pngModeUnavailable ? 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200' : 'border-primary/20 bg-primary/5')}>
-          <p className="font-medium">{pngModeUnavailable
-            ? '当前输出为 ' + settings.outputFormat.toUpperCase() + '：减色／保色选项不生效。'
-            : settings.keepFormat
-              ? '当前保持原始格式：减色／保色仅对 PNG 原图生效。'
-              : '当前输出为 PNG：减色／保色选项会生效。'}</p>
-          <p className="mt-1">{settings.keepFormat
-            ? 'JPEG、WebP、GIF 等原图不受此选项影响。如需使用，请将输出格式设为 PNG。'
-            : pngModeUnavailable
-              ? '这两个选项仅影响 PNG 输出。JPEG、WebP、GIF 等输出格式不会因切换此项而改变压缩结果。'
-              : '无论原图是 PNG、JPEG 还是 WebP，转换为 PNG 输出后都会使用这里的选择。'}</p>
-          {(pngModeUnavailable || settings.keepFormat) && (
-            <button onClick={() => update({ keepFormat: false, outputFormat: 'png' }, false)}
-              className="mt-3 px-3 py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90">改为 PNG 输出</button>
-          )}
-        </div>
-        <div role="radiogroup" aria-labelledby="png-color-mode-title" aria-describedby="png-color-scope"
-          aria-disabled={pngModeUnavailable} className={'grid grid-cols-1 xl:grid-cols-2 gap-3 ' + (pngModeUnavailable ? 'opacity-50' : '')}>
-          <label className={'flex items-start gap-3 rounded-lg border p-4 ' + (pngModeUnavailable ? 'cursor-not-allowed ' : 'cursor-pointer ') +
-            (settings.optimizeColors ? 'border-primary bg-primary/5' : 'border-border hover:bg-accent')}>
-            <input id="png-color-reduce" name="png-color-mode" type="radio" value="reduce"
-              disabled={pngModeUnavailable}
-              checked={settings.optimizeColors} onChange={() => update({ optimizeColors: true }, false)}
-              className="accent-primary mt-1" />
-            <span>
-              <span className="flex flex-wrap items-center gap-2 font-medium">
-                减色压缩
-                <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">默认推荐</span>
-              </span>
-              <span className="block text-sm text-muted-foreground mt-2">通过减少颜色数量，体积通常缩小明显，适合截图和日常分享；部分颜色或渐变细节可能改变。</span>
-            </span>
-          </label>
-          <label className={'flex items-start gap-3 rounded-lg border p-4 ' + (pngModeUnavailable ? 'cursor-not-allowed ' : 'cursor-pointer ') +
-            (!settings.optimizeColors ? 'border-primary bg-primary/5' : 'border-border hover:bg-accent')}>
-            <input id="png-color-preserve" name="png-color-mode" type="radio" value="preserve"
-              disabled={pngModeUnavailable}
-              checked={!settings.optimizeColors} onChange={() => update({ optimizeColors: false }, false)}
-              className="accent-primary mt-1" />
-            <span>
-              <span className="font-medium">保色优化</span>
-              <span className="block text-sm text-muted-foreground mt-2">不主动减少颜色数量，保留原有渐变层次与平滑过渡；体积缩减通常较少，适合更重视色彩和渐变的图片。</span>
-            </span>
-          </label>
-        </div>
-        <p className="text-sm text-muted-foreground">切换轻度、中度或高度压缩会保留这里的选择；切回 PNG 输出后会恢复生效。</p>
-      </section>
 
       <section className={cardClass}>
         <h2 className="text-xl font-semibold">目标体积（可选）</h2>
@@ -187,7 +138,7 @@ export default function CompressionSettings() {
         {invalidTarget && <p role="alert" className="text-amber-700">目标体积至少为 1 KB。</p>}
       </section>
 
-      <section className={cardClass}>
+      <section id="output-format-settings" className={cardClass}>
         <h2 className="text-xl font-semibold">输出格式</h2>
         <label className="flex items-center gap-2">
           <input id="keep-format" type="checkbox" checked={settings.keepFormat}
@@ -204,6 +155,41 @@ export default function CompressionSettings() {
           ))}
         </div>
         <p className="text-sm text-muted-foreground">PNG 可选减色压缩或保色优化；WebP 和 JPEG 通过质量参数控制体积，JPEG 不支持透明，透明区域将转为白色。点击格式即可切换输出。</p>
+        {showPngOptions && (
+          <div className="border-t border-border pt-5 space-y-4" aria-labelledby="png-color-mode-title">
+            <h3 id="png-color-mode-title" className="text-lg font-semibold">PNG 压缩方式</h3>
+            <p id="png-color-scope" className="text-sm text-muted-foreground">{settings.keepFormat
+              ? '当前保持原始格式：以下选项仅对 PNG 原图生效，JPEG、WebP、GIF 等原图不受影响。'
+              : '当前输出为 PNG：以下选项对所有转换为 PNG 的图片生效。'}</p>
+            <div role="radiogroup" aria-labelledby="png-color-mode-title" aria-describedby="png-color-scope"
+              className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+              <label className={'flex items-start gap-3 rounded-lg border p-4 cursor-pointer ' +
+                (settings.optimizeColors ? 'border-primary bg-primary/5' : 'border-border hover:bg-accent')}>
+                <input id="png-color-reduce" name="png-color-mode" type="radio" value="reduce"
+                  checked={settings.optimizeColors} onChange={() => update({ optimizeColors: true }, false)}
+                  className="accent-primary mt-1" />
+                <span>
+                  <span className="flex flex-wrap items-center gap-2 font-medium">
+                    减色压缩
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">默认推荐</span>
+                  </span>
+                  <span className="block text-sm text-muted-foreground mt-2">通过减少颜色数量，体积通常缩小明显，适合截图和日常分享；部分颜色或渐变细节可能改变。</span>
+                </span>
+              </label>
+              <label className={'flex items-start gap-3 rounded-lg border p-4 cursor-pointer ' +
+                (!settings.optimizeColors ? 'border-primary bg-primary/5' : 'border-border hover:bg-accent')}>
+                <input id="png-color-preserve" name="png-color-mode" type="radio" value="preserve"
+                  checked={!settings.optimizeColors} onChange={() => update({ optimizeColors: false }, false)}
+                  className="accent-primary mt-1" />
+                <span>
+                  <span className="font-medium">保色优化</span>
+                  <span className="block text-sm text-muted-foreground mt-2">不主动减少颜色数量，保留原有渐变层次与平滑过渡；体积缩减通常较少，适合更重视色彩和渐变的图片。</span>
+                </span>
+              </label>
+            </div>
+            <p className="text-sm text-muted-foreground">切换输出格式或压缩预设会保留这里的选择，输出为 PNG 时生效。</p>
+          </div>
+        )}
       </section>
 
       <section className={cardClass}>

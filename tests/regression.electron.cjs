@@ -169,26 +169,26 @@ app.on('browser-window-created', (_, window) => {
         saved = await run('window.compression.getCompressionSettings()');
         assert.equal(saved.settings.optimizeColors, true);
       });
-      await test('PNG mode explains format scope and disables ineffective choices', async () => {
+      await test('PNG mode appears inside output format only when applicable and retains selection', async () => {
         assert.ok((await run('document.querySelector("#png-color-scope").textContent')).includes('仅对 PNG 原图生效'));
+        assert.equal(await run('!!document.querySelector("#output-format-settings #png-color-preserve")'), true);
+        await run('document.querySelector("#png-color-preserve").click()');
         for (const format of ['JPEG', 'WEBP', 'GIF']) {
           await run(`Array.from(document.querySelectorAll('button')).find(button=>button.textContent===${JSON.stringify(format)}).click()`);
-          assert.equal(await run('document.querySelector("#png-color-reduce").disabled'), true);
-          assert.equal(await run('document.querySelector("#png-color-preserve").disabled'), true);
-          const scope = await run('document.querySelector("#png-color-scope").textContent');
-          assert.ok(scope.includes(format) && scope.includes('不生效'));
-          await run('document.querySelector("#png-color-preserve").click()');
-          assert.equal(await run('document.querySelector("#png-color-reduce").checked'), true);
+          assert.equal(await run('!!document.querySelector("#png-color-mode-title")'), false);
+          assert.equal(await run('!!document.querySelector("#png-color-preserve")'), false);
         }
-        await run(`Array.from(document.querySelectorAll('button')).find(button=>button.textContent==='改为 PNG 输出').click()`);
-        assert.equal(await run('document.querySelector("#png-color-preserve").disabled'), false);
+        await run(`Array.from(document.querySelectorAll('button')).find(button=>button.textContent==='PNG').click()`);
+        assert.equal(await run('document.querySelector("#png-color-preserve").checked'), true);
         assert.ok((await run('document.querySelector("#png-color-scope").textContent')).includes('当前输出为 PNG'));
         await sleep(100);
         const saved = await run('window.compression.getCompressionSettings()');
         assert.equal(saved.settings.outputFormat, 'png');
         assert.equal(saved.settings.keepFormat, false);
+        assert.equal(saved.settings.optimizeColors, false);
         await run('document.querySelector("#keep-format").click()');
         assert.ok((await run('document.querySelector("#png-color-scope").textContent')).includes('保持原始格式'));
+        await run('document.querySelector("#png-color-reduce").click()');
       });
       await test('changing a checkbox persists its new value', async () => {
         await waitFor('!!document.querySelector("#keep-dimensions")', 'settings loaded');
