@@ -343,6 +343,7 @@ const ExportPage: React.FC = () => {
                 </div>
                 <div className="p-3 bg-card">
                     <p className="font-medium truncate text-foreground" title={image.name}>{image.name}</p>
+                    {image.warning && <p className="text-xs text-amber-700 mt-1">{image.warning}</p>}
                     <div className="text-sm text-muted-foreground mt-1">
                     <p>
                       {formatFileSize(image.originalSize)} → {formatFileSize(image.compressedSize)}

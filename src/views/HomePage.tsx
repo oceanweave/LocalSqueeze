@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { Images, Package, Search, Repeat, Smartphone, Lock, FileImage, Upload, X, Download, Eye, FolderOpen } from 'lucide-react';
 import { formatFileSize, getCompressionSettings, buildCompressionSettings } from '../lib/utils';
 import { useImagePaste } from '../hooks/useImagePaste';
@@ -38,6 +38,7 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
   
   // 图片处理相关状态
+  const autoAttemptedFiles = useRef(new Set<File>());
   const [files, setFiles] = useState<File[]>([]);
   const [processedFiles, setProcessedFiles] = useState<any[]>([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -190,13 +191,14 @@ export default function HomePage() {
 
   // 监听文件变化，自动处理新上传的文件
   useEffect(() => {
-    const unprocessedFiles = files.filter(file => !processedFileNames.has(file.name));
+    const unprocessedFiles = files.filter(file => !processedFileNames.has(file.name) && !autoAttemptedFiles.current.has(file));
     
     // 如果有未处理的文件且当前没有在处理中，则自动开始处理
     if (unprocessedFiles.length > 0 && !isProcessing) {
       // 使用setTimeout确保状态更新完成
       const timer = setTimeout(() => {
-        processImages();
+        unprocessedFiles.forEach(file => autoAttemptedFiles.current.add(file));
+        processImages(unprocessedFiles);
       }, 100);
       
       return () => clearTimeout(timer);
@@ -368,19 +370,20 @@ export default function HomePage() {
 
   // 清除所有文件
   const clearAllFiles = () => {
+    autoAttemptedFiles.current.clear();
     setFiles([]);
     setProcessedFiles([]);
     setProcessedFileNames(new Set());
   };
 
   // 处理图片
-  const processImages = async () => {
+  const processImages = async (selectedFiles: File[] = files) => {
     if (files.length === 0) {
       alert('请先上传图片再进行处理');
       return;
     }
     
-    const unprocessedFiles = files.filter(file => !processedFileNames.has(file.name));
+    const unprocessedFiles = selectedFiles.filter(file => !processedFileNames.has(file.name));
     if (unprocessedFiles.length === 0) {
       alert('所有文件已处理完成');
       return;
@@ -460,8 +463,9 @@ export default function HomePage() {
           if (validPaths.length === 1) {
             const singleResult = await window.compression.compressImage(validPaths[0], currentSettings);
             result = {
-              success: true,
-              results: [singleResult]
+              success: singleResult.success,
+              error: singleResult.error,
+              results: singleResult.success ? [singleResult] : []
             };
           } else {
             result = await window.compression.batchCompressImages(validPaths, currentSettings);
@@ -473,8 +477,9 @@ export default function HomePage() {
               settings: currentSettings
             });
             result = {
-              success: true,
-              results: [singleResult]
+              success: singleResult.success,
+              error: singleResult.error,
+              results: singleResult.success ? [singleResult] : []
             };
           } else {
             result = await window.electron.ipcRenderer.invoke('batch-compress-images', {
@@ -490,6 +495,7 @@ export default function HomePage() {
       if (result && result.success) {
         const processed = await Promise.all(result.results.map(async (item: CompressionResult) => {
           try {
+            if (!item.success) throw new Error(item.error || '压缩失败');
             const imageUrl = await window.electron.ipcRenderer.invoke('get-image-data-url', item.outputPath);
             const originalFilename = originalFilenames.get(item.originalPath) || getBasename(item.originalPath);
             
@@ -505,7 +511,9 @@ export default function HomePage() {
                 width: item.width,
                 height: item.height,
                 format: item.outputFormat,
-                processedAt: Date.now()
+                processedAt: Date.now(),
+                warning: item.warning,
+                targetMet: item.targetMet
               });
             } catch (error) {
               console.error('添加处理记录失败:', error);
@@ -521,6 +529,7 @@ export default function HomePage() {
               format: item.outputFormat.toUpperCase(),
               savingRate: typeof item.compressionRate === 'number' ? item.compressionRate : parseFloat(item.compressionRate) || 0,
               status: 'completed',
+              warning: item.warning,
               outputPath: item.outputPath
             };
           } catch (error) {
@@ -544,8 +553,9 @@ export default function HomePage() {
         setProcessedFiles(prev => [...prev, ...processed]);
         
         const newProcessedNames = new Set(processedFileNames);
-        unprocessedFiles.forEach(file => {
-          newProcessedNames.add(file.name);
+        result.results.filter(item => item.success).forEach(item => {
+          const name = originalFilenames.get(item.originalPath);
+          if (name) newProcessedNames.add(name);
         });
         setProcessedFileNames(newProcessedNames);
         
@@ -584,7 +594,7 @@ export default function HomePage() {
     try {
       await window.electron.ipcRenderer.invoke('save-file', {
         sourcePath: outputPath,
-        suggestedName: fileName
+        suggestedName: fileName.replace(/\.[^.]+$/, '') + '.' + outputPath.split('.').pop()
       });
     } catch (error) {
       console.error('下载文件失败:', error);
@@ -734,6 +744,7 @@ export default function HomePage() {
                         )}
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-sm text-foreground truncate">{file.name}</p>
+                          {file.warning && <p role="status" className="text-xs text-amber-700 mt-1">{file.warning}</p>}
                           <div className="text-xs text-muted-foreground space-y-1">
                             <div className="flex justify-between">
                               <span>原始: {file.originalSize}</span>

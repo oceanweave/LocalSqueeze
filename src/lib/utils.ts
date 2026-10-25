@@ -3,6 +3,7 @@ import { twMerge } from "tailwind-merge";
 // eslint-disable-next-line import/no-unresolved
 import { CompressionSettings } from "../types/global";
 import path from 'path';
+import { defaultCompressionPreferences, normalizeCompressionPreferences } from './compression-settings';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -59,34 +60,20 @@ export function generateOutputFileName(
   outputFormat?: string,
   keepFormat = true
 ): string {
-  console.log('生成文件名，参数：', {
-    originalPath,
-    fileNaming,
-    outputFormat,
-    keepFormat
-  });
-  
   const fileName = path.basename(originalPath);
   const fileExt = path.extname(originalPath);
   const fileNameWithoutExt = path.basename(fileName, fileExt);
   const originalExt = fileExt.substring(1).toLowerCase(); // 去掉点号
   
-  console.log('文件名分析：', {
-    fileName,
-    fileExt,
-    fileNameWithoutExt,
-    originalExt
-  });
-  
   // 替换文件名模板中的变量
-  const outputFileName = fileNaming.replace('{filename}', fileNameWithoutExt);
+  const outputFileName = fileNaming.replace(/\{filename\}/g, fileNameWithoutExt)
+    .replace(/\{timestamp\}/g, String(Date.now())).replace(/[\\/:*?"<>|]/g, '_');
   
   // 根据是否保持原始格式决定扩展名
   const finalExt = keepFormat ? originalExt : (outputFormat || originalExt);
   const outputExtension = '.' + finalExt.toLowerCase();
   
   const result = outputFileName + outputExtension;
-  console.log('生成的文件名：', result);
   
   return result;
 }
@@ -96,106 +83,40 @@ export function generateOutputFileName(
  * @param settings 压缩设置
  */
 export async function saveCompressionSettings(settings: any): Promise<void> {
-  try {
-    console.log('保存设置到配置文件:', settings);
-    if (window.compression && window.compression.saveCompressionSettings) {
-      const result = await window.compression.saveCompressionSettings(settings);
-      if (!result.success) {
-        console.error('保存压缩设置失败:', result.error);
-      }
-    } else {
-      // 如果Electron API不可用（例如在开发环境），回退到localStorage
-      const settingsString = JSON.stringify(settings);
-      console.log('Electron API不可用，保存设置到localStorage:', settingsString);
-      localStorage.setItem('compressionSettings', settingsString);
-    }
-  } catch (error) {
-    console.error('保存压缩设置失败:', error);
-  }
-}
-
-/**
- * 从配置文件获取压缩设置
- * @returns 压缩设置对象，如果没有则返回默认设置
- */
-export async function getCompressionSettings(): Promise<any> {
-  try {
-    if (window.compression && window.compression.getCompressionSettings) {
-      console.log('从配置文件加载设置');
-      const result = await window.compression.getCompressionSettings();
-      if (result.success && result.settings) {
-        console.log('从配置文件加载的设置:', result.settings);
-        console.log('文件命名设置:', result.settings.fileNaming, result.settings.fileExtension);
-        return result.settings;
-      } else if (result.error) {
-        console.error('获取压缩设置失败:', result.error);
-      }
-    } else {
-      // 如果Electron API不可用（例如在开发环境），回退到localStorage
-      const savedSettings = localStorage.getItem('compressionSettings');
-      if (savedSettings) {
-        const settings = JSON.parse(savedSettings);
-        console.log('从localStorage加载的设置:', settings);
-        console.log('文件命名设置:', settings.fileNaming, settings.fileExtension);
-        return settings;
-      }
-    }
-  } catch (error) {
-    console.error('获取压缩设置失败:', error);
-  }
-  
-  // 默认设置
-  const defaultSettings = {
-    preset: '低压缩',
-    quality: 70,
-    keepDimensions: true,
-    width: 1920,
-    height: 1080,
-    keepRatio: true,
-    removeMetadata: true,
-    optimizeColors: false,
-    progressive: false,
-    keepFormat: true,
-    outputFormat: 'PNG',
-    fileNaming: '{filename}_compressed'
-  };
-  
-  console.log('使用默认设置:', defaultSettings);
-  return defaultSettings;
-}
-
-/**
- * 构建压缩设置对象
- * @param settings 设置对象
- * @returns 用于压缩API的设置对象
- */
-export function buildCompressionSettings(settings: any): CompressionSettings {
-  const compressionSettings: CompressionSettings = {
-    quality: settings.quality || 70,
-    keepDimensions: settings.keepDimensions !== undefined ? settings.keepDimensions : true,
-    keepFormat: settings.keepFormat !== undefined ? settings.keepFormat : true,
-    removeMetadata: settings.removeMetadata !== undefined ? settings.removeMetadata : true,
-    optimizeColors: settings.optimizeColors || false,
-    progressive: settings.progressive || false
-  };
-  
-  // 添加可选参数
-  if (!compressionSettings.keepDimensions) {
-    (compressionSettings as any).width = settings.width || 1920;
-    (compressionSettings as any).height = settings.height || 1080;
-  }
-  
-  if (!compressionSettings.keepFormat) {
-    // 确保输出格式是小写的
-    (compressionSettings as any).outputFormat = settings.outputFormat ? settings.outputFormat.toLowerCase() : 'png';
-    console.log(`构建压缩设置，输出格式: ${(compressionSettings as any).outputFormat}`);
+  if (window.compression?.saveCompressionSettings) {
+    const result = await window.compression.saveCompressionSettings(settings);
+    if (!result.success) throw new Error(result.error || '保存压缩设置失败');
   } else {
-    // 即使保持原始格式，也需要添加outputFormat，以便在generateOutputFileName中使用
-    (compressionSettings as any).outputFormat = settings.outputFormat ? settings.outputFormat.toLowerCase() : 'png';
+    localStorage.setItem('compressionSettings', JSON.stringify(settings));
   }
-  
-  // 添加文件命名设置
-  (compressionSettings as any).fileNaming = settings.fileNaming || '{filename}_compressed';
-  
-  return compressionSettings;
-} 
+}
+
+export async function getCompressionSettings(): Promise<any> {
+  if (window.compression?.getCompressionSettings) {
+    const result = await window.compression.getCompressionSettings();
+    if (result.success && result.settings) return normalizeCompressionPreferences(result.settings);
+    throw new Error(result.error || '加载压缩设置失败');
+  }
+  const saved = localStorage.getItem('compressionSettings');
+  return normalizeCompressionPreferences(saved ? JSON.parse(saved) : {});
+}
+
+/** Translate saved preferences into validated encoder options. Disabled size targets are omitted. */
+export function buildCompressionSettings(settings: any): CompressionSettings {
+  const saved = { ...defaultCompressionPreferences, ...settings };
+  return {
+    quality: Math.max(1, Math.min(100, Number.isFinite(Number(saved.quality)) ? Math.round(Number(saved.quality)) : 60)),
+    keepDimensions: saved.keepDimensions,
+    keepFormat: saved.keepFormat,
+    keepRatio: saved.keepRatio,
+    width: Math.max(1, Math.round(Number(saved.width) || 1920)),
+    height: Math.max(1, Math.round(Number(saved.height) || 1080)),
+    removeMetadata: saved.removeMetadata,
+    optimizeColors: saved.optimizeColors,
+    progressive: saved.progressive,
+    outputFormat: saved.outputFormat.toLowerCase(),
+    fileNaming: saved.fileNaming || '{filename}_compressed',
+    targetSizeKB: saved.targetEnabled ? Number(saved.targetSizeKB) : undefined,
+    targetAllowResize: saved.targetAllowResize
+  };
+}

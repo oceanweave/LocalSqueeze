@@ -3,11 +3,7 @@
  * 使用sharp优化WebP图像
  */
 
-import sharp from 'sharp';
-import path from 'path';
-import fs from 'fs/promises';
-import { CompressionSettings, CompressionResult } from './index';
-import { getFileExtension } from '../../lib/utils';
+import { compressImage, CompressionSettings, CompressionResult } from './index';
 
 /**
  * WebP专用压缩设置
@@ -31,93 +27,7 @@ export async function compressWebp(
   outputPath: string,
   settings: WebpCompressionSettings
 ): Promise<CompressionResult> {
-  try {
-    // 获取原始文件信息
-    const originalFileStats = await fs.stat(inputPath);
-    const originalSize = originalFileStats.size;
-    const originalFormat = getFileExtension(inputPath);
-    
-    // 创建Sharp实例
-    let image = sharp(inputPath);
-    
-    // 获取图像元数据
-    const metadata = await image.metadata();
-    
-    // 调整尺寸
-    if (!settings.keepDimensions && settings.width && settings.height) {
-      image = image.resize({
-        width: settings.width,
-        height: settings.height,
-        fit: 'inside',
-        withoutEnlargement: true
-      });
-    }
-    
-    // 应用WebP特定的优化设置
-    image = image.webp({
-      quality: settings.quality,
-      lossless: settings.lossless,
-      nearLossless: settings.nearLossless,
-      smartSubsample: settings.smartSubsample,
-      effort: settings.effort
-    });
-    
-    // 是否移除元数据
-    if (settings.removeMetadata) {
-      image = image.withMetadata({
-        orientation: metadata.orientation, // 保留方向信息
-        density: metadata.density // 保留DPI信息
-      });
-    } else {
-      image = image.withMetadata();
-    }
-    
-    // 确保输出目录存在
-    const outputDir = path.dirname(outputPath);
-    await fs.mkdir(outputDir, { recursive: true });
-    
-    // 处理图像并保存到输出路径
-    await image.toFile(outputPath);
-    
-    // 获取压缩后的文件信息
-    const compressedFileStats = await fs.stat(outputPath);
-    const compressedSize = compressedFileStats.size;
-    
-    // 获取最终图像的尺寸信息
-    const outputMetadata = await sharp(outputPath).metadata();
-    
-    // 计算压缩率
-    const savedBytes = originalSize - compressedSize;
-    const compressionRate = (savedBytes / originalSize * 100).toFixed(1) + '%';
-    
-    return {
-      success: true,
-      originalPath: inputPath,
-      outputPath: outputPath,
-      originalSize,
-      compressedSize,
-      compressionRate,
-      originalFormat,
-      outputFormat: 'webp',
-      width: outputMetadata.width || 0,
-      height: outputMetadata.height || 0
-    };
-  } catch (error) {
-
-    return {
-      success: false,
-      originalPath: inputPath,
-      outputPath: '',
-      originalSize: 0,
-      compressedSize: 0,
-      compressionRate: '0%',
-      originalFormat: '',
-      outputFormat: '',
-      width: 0,
-      height: 0,
-      error: error instanceof Error ? error.message : '未知错误'
-    };
-  }
+  return compressImage(inputPath, outputPath, settings);
 }
 
 /**
@@ -138,7 +48,7 @@ export async function convertToWebp(
   }
   
   // 调用标准的WebP压缩函数
-  return compressWebp(inputPath, outputPath, settings);
+  return compressWebp(inputPath, outputPath, { ...settings, keepFormat: false, outputFormat: 'webp' });
 }
 
 /**

@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom';
 import ThemeToggle from '../components/ThemeToggle';
 import Sidebar from '../components/Sidebar';
 import iconImage from '../assets/icons/icon.png';
+import { version } from '../../package.json';
 
 export default function MainLayout() {
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -64,7 +65,7 @@ export default function MainLayout() {
         {/* 页脚 */}
         <footer className="bg-muted py-4 px-6 text-center text-sm text-muted-foreground border-t border-border mt-auto">
           <div className="flex justify-center items-center gap-2">
-            <span>图片压缩工具 v1.0.0 © {new Date().getFullYear()}</span>
+            <span>图片压缩工具 v{version} © {new Date().getFullYear()}</span>
             <span className="inline-block w-1 h-1 rounded-full bg-primary"></span>
             <span>高效 · 简洁 · 专业</span>
           </div>

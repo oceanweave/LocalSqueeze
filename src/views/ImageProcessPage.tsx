@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { X, Upload, Download, Eye } from 'lucide-react';
 import { formatFileSize, calculateCompressionRate, getCompressionSettings, buildCompressionSettings } from '../lib/utils';
 import { useImagePaste } from '../hooks/useImagePaste';
@@ -372,8 +372,9 @@ export default function ImageProcessPage() {
             const singleResult = await window.compression.compressImage(validPaths[0], currentSettings);
             // 将单个结果转换为与批量处理相同的格式
             result = {
-              success: true,
-              results: [singleResult]
+              success: singleResult.success,
+              error: singleResult.error,
+              results: singleResult.success ? [singleResult] : []
             };
           } else {
             // 批量处理 - 保存到子文件夹
@@ -388,8 +389,9 @@ export default function ImageProcessPage() {
               settings: currentSettings
             });
             result = {
-              success: true,
-              results: [singleResult]
+              success: singleResult.success,
+              error: singleResult.error,
+              results: singleResult.success ? [singleResult] : []
             };
           } else {
             // 批量处理
@@ -408,6 +410,7 @@ export default function ImageProcessPage() {
         // 处理压缩结果
         const processed = await Promise.all(result.results.map(async (item: CompressionResult) => {
           try {
+            if (!item.success) throw new Error(item.error || '压缩失败');
             // 获取本地图片URL
             const imageUrl = await window.electron.ipcRenderer.invoke('get-image-data-url', item.outputPath);
             
@@ -427,7 +430,9 @@ export default function ImageProcessPage() {
                 width: item.width,
                 height: item.height,
                 format: item.outputFormat,
-                processedAt: Date.now()
+                processedAt: Date.now(),
+                warning: item.warning,
+                targetMet: item.targetMet
               });
             } catch (error) {
               console.error('添加处理记录失败:', error);
@@ -443,6 +448,7 @@ export default function ImageProcessPage() {
               format: item.outputFormat.toUpperCase(),
               savingRate: item.compressionRate,
               status: 'completed',
+              warning: item.warning,
               outputPath: item.outputPath
             };
           } catch (error) {
@@ -475,8 +481,9 @@ export default function ImageProcessPage() {
         
         // 更新已处理的文件名集合
         const newProcessedNames = new Set(processedFileNames);
-        unprocessedFiles.forEach(file => {
-          newProcessedNames.add(file.name);
+        result.results.filter(item => item.success).forEach(item => {
+          const name = originalFilenames.get(item.originalPath);
+          if (name) newProcessedNames.add(name);
         });
         setProcessedFileNames(newProcessedNames);
         
@@ -555,7 +562,7 @@ export default function ImageProcessPage() {
       // 使用原始文件名作为建议名称
       await window.electron.ipcRenderer.invoke('save-file', {
         sourcePath: outputPath,
-        suggestedName: fileName
+        suggestedName: fileName.replace(/\.[^.]+$/, '') + '.' + outputPath.split('.').pop()
       });
     } catch (error) {
       console.error('下载文件失败:', error);
@@ -781,6 +788,7 @@ export default function ImageProcessPage() {
                     )}
                     <div className="flex-1">
                       <div className="font-medium text-foreground">{file.name}</div>
+                      {file.warning && <p role="status" className="text-xs text-amber-700 mt-1">{file.warning}</p>}
                       <div className="text-xs text-muted-foreground">
                         {file.status === 'completed' ? (
                           <>
@@ -850,9 +858,9 @@ export default function ImageProcessPage() {
             
             <p className="text-center text-sm text-muted-foreground">
               使用当前压缩设置处理图片<br />
-              <a href="/settings/compression" className="text-primary hover:underline">
+              <Link to="/settings" className="text-primary hover:underline">
                 前往压缩设置页面修改参数
-              </a>
+              </Link>
             </p>
           </div>
           

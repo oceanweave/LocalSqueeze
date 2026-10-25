@@ -9,25 +9,12 @@ import fs from 'fs/promises';
 import os from 'os';
 import { 
   compressImage, 
-  batchCompressImages,
   CompressionSettings,
   CompressionResult,
   getPresetSettings
 } from '../compression';
-import { 
-  compressJpeg, 
-  getDefaultJpegSettings 
-} from '../compression/jpeg';
-import { 
-  compressPng, 
-  getDefaultPngSettings 
-} from '../compression/png';
-import { 
-  compressWebp,
-  convertToWebp,
-  getDefaultWebpSettings 
-} from '../compression/webp';
-import { formatFileSize, getFileExtension, generateOutputFileName } from '../../lib/utils';
+import { convertToWebp, getDefaultWebpSettings } from '../compression/webp';
+import { generateOutputFileName } from '../../lib/utils';
 
 // 临时目录路径
 const TEMP_DIR = path.join(os.tmpdir(), 'imgs-compress');
@@ -87,46 +74,8 @@ export function initCompressionHandlers() {
         // 已删除日志
       }
       
-      // 根据文件类型选择不同的压缩方法
-      const fileExtension = getFileExtension(imagePath);
-      let result: CompressionResult;
-      
-      // 已删除日志
-      
-      switch (fileExtension) {
-        case 'jpg':
-        case 'jpeg':
+      const result = await compressImage(imagePath, outputPath, settings);
 
-          result = await compressJpeg(imagePath, outputPath, {
-            ...getDefaultJpegSettings(),
-            ...settings
-          });
-          break;
-          
-        case 'png':
-          // 已删除日志
-          result = await compressPng(imagePath, outputPath, {
-            ...getDefaultPngSettings(),
-            ...settings
-          });
-          break;
-          
-        case 'webp':
-          // 已删除日志
-          result = await compressWebp(imagePath, outputPath, {
-            ...getDefaultWebpSettings(),
-            ...settings
-          });
-          break;
-          
-        default:
-          // 已删除日志
-          // 默认使用通用压缩方法
-          result = await compressImage(imagePath, outputPath, settings);
-      }
-      
-      // 已删除日志
-      
       return result;
     } catch (error) {
       // 已删除日志
@@ -161,7 +110,7 @@ export function initCompressionHandlers() {
       
       // 批量压缩图片 - 使用单张图片处理的逻辑，确保一致性
       const results: CompressionResult[] = [];
-      const current = 0;
+      let current = 0;
       const total = imagePaths.length;
       
       for (const imagePath of imagePaths) {
@@ -177,45 +126,10 @@ export function initCompressionHandlers() {
         
         // 已删除日志
         
-        // 使用与单张处理相同的逻辑，根据文件类型选择不同的压缩方法
-        const fileExtension = getFileExtension(imagePath);
-        let result: CompressionResult;
-        
-        // 已删除日志
-        
-        switch (fileExtension) {
-          case 'jpg':
-          case 'jpeg':
-            // 已删除日志
-            result = await compressJpeg(imagePath, outputPath, {
-              ...getDefaultJpegSettings(),
-              ...settings
-            });
-            break;
-            
-          case 'png':
-            // 已删除日志
-            result = await compressPng(imagePath, outputPath, {
-              ...getDefaultPngSettings(),
-              ...settings
-            });
-            break;
-            
-          case 'webp':
-            // 已删除日志
-            result = await compressWebp(imagePath, outputPath, {
-              ...getDefaultWebpSettings(),
-              ...settings
-            });
-            break;
-            
-          default:
-            // 已删除日志
-            // 默认使用通用压缩方法
-            result = await compressImage(imagePath, outputPath, { ...settings });
-        }
-        
+        const result = await compressImage(imagePath, outputPath, settings);
+
         results.push(result);
+        current++;
         
         // 已删除日志
         
@@ -230,7 +144,8 @@ export function initCompressionHandlers() {
       // 已删除日志
       
       return {
-        success: true,
+        success: results.some(result => result.success),
+        error: results.every(result => !result.success) ? results[0]?.error : undefined,
         results,
         outputDir
       };

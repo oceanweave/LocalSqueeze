@@ -19,7 +19,9 @@ export interface ProcessedImage {
   width: number;
   height: number;
   format: string;
-  processedAt: number; // 时间戳
+  processedAt: number;
+  warning?: string;
+  targetMet?: boolean; // 时间戳
 }
 
 export interface CompressionStats {

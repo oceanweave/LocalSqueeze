@@ -17,6 +17,10 @@ export interface CompressionSettings {
   width?: number;
   height?: number;
   outputFormat?: string;
+  keepRatio?: boolean;
+  targetEnabled?: boolean;
+  targetSizeKB?: number;
+  targetAllowResize?: boolean;
 }
 
 // 压缩结果接口
@@ -31,6 +35,9 @@ export interface CompressionResult {
   height: number;
   outputFormat: string;
   error?: string;
+  targetSizeKB?: number;
+  targetMet?: boolean;
+  warning?: string;
 }
 
 // 处理后的图片信息
@@ -46,6 +53,8 @@ export interface ProcessedImage {
   height: number;
   format: string;
   processedAt: number;
+  warning?: string;
+  targetMet?: boolean;
 }
 
 // 压缩统计数据

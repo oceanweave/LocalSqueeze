@@ -1,80 +1,33 @@
-/**
- * 配置处理程序
- * 负责处理应用配置的保存和读取
- */
-
-import { ipcMain } from 'electron';
+import { ipcMain, app } from 'electron';
 import fs from 'fs/promises';
 import path from 'path';
-import { app } from 'electron';
+import { defaultCompressionPreferences, normalizeCompressionPreferences } from '../../lib/compression-settings';
 
-// 获取应用数据目录
-const APP_DATA_DIR = path.join(app.getPath('userData'), 'config');
-const CONFIG_FILE = path.join(APP_DATA_DIR, 'compression-settings.json');
+const CONFIG_DIR = path.join(app.getPath('userData'), 'config');
+const CONFIG_FILE = path.join(CONFIG_DIR, 'compression-settings.json');
+let writes: Promise<void> = Promise.resolve();
 
-// 已删除日志
-
-// 确保配置目录存在
-async function ensureConfigDir() {
-  try {
-    await fs.mkdir(APP_DATA_DIR, { recursive: true });
-    return true;
-  } catch (error) {
-    // 已删除日志
-    return false;
-  }
-}
-
-/**
- * 初始化配置处理程序
- */
 export function initConfigHandlers() {
-  // 保存压缩设置
   ipcMain.handle('save-compression-settings', async (_, settings) => {
-    try {
-      await ensureConfigDir();
-      await fs.writeFile(CONFIG_FILE, JSON.stringify(settings, null, 2), 'utf-8');
-      return { success: true };
-    } catch (error) {
-      // 已删除日志
-      return { success: false, error: error.message };
-    }
+    // Serialize writes and rename atomically, so fast slider changes cannot leave
+    // truncated JSON or an older preference winning a race with a newer one.
+    const write = writes.then(async () => {
+      await fs.mkdir(CONFIG_DIR, { recursive: true });
+      const temporary = `${CONFIG_FILE}.tmp`;
+      await fs.writeFile(temporary, JSON.stringify(settings, null, 2), 'utf-8');
+      await fs.rename(temporary, CONFIG_FILE);
+    });
+    writes = write.catch(() => { /* Report failure to the originating request. */ });
+    try { await write; return { success: true }; }
+    catch (error) { return { success: false, error: error.message }; }
   });
-
-  // 读取压缩设置
   ipcMain.handle('get-compression-settings', async () => {
+    await writes;
     try {
-      // 检查配置文件是否存在
-      try {
-        await fs.access(CONFIG_FILE);
-      } catch (error) {
-        // 如果文件不存在，返回默认设置
-        return {
-          success: true,
-          settings: {
-            preset: '低压缩',
-            quality: 70,
-            keepDimensions: true,
-            width: 1920,
-            height: 1080,
-            keepRatio: true,
-            removeMetadata: true,
-            optimizeColors: false,
-            progressive: false,
-            keepFormat: true,
-            outputFormat: 'PNG',
-            fileNaming: '{filename}_compressed'
-          }
-        };
-      }
-
-      // 读取配置文件
       const data = await fs.readFile(CONFIG_FILE, 'utf-8');
-      const settings = JSON.parse(data);
-      
-      return { success: true, settings };
+      return { success: true, settings: normalizeCompressionPreferences(JSON.parse(data)) };
     } catch (error) {
-      // 已删除日志
+      if (error.code === 'ENOENT') return { success: true, settings: defaultCompressionPreferences };
       return { success: false, error: error.message };
     }
   });
