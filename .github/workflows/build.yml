@@ -42,6 +42,8 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
+      - name: Verify installer configuration
+        run: node tests/release-config.cjs
       - name: Build installers
         run: npm run make -- --platform=${{ matrix.platform }} --arch=${{ matrix.arch }} --targets=${{ matrix.targets }}
       - name: Prepare release assets

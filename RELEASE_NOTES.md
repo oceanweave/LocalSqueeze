@@ -1,5 +1,8 @@
-# LocalSqueeze v1.0.10
+# LocalSqueeze v1.0.11
 
+- 修复 Windows Squirrel 安装包构建失败：工作流通过 --targets 选择打包器时正确保留安装器名称、图标等配置，避免带 npm 作用域的包名生成无效 NuGet 路径。
+- 修复同一目标选择方式下 Mac DMG 自定义配置丢失的问题，统一 Windows 与 Mac 的 ZIP 配置。
+- 构建前自动验证安装器配置，防止回归。
 - 将“PNG 压缩方式”合并到“输出格式”区域，选择 PNG 时显示减色／保色选项，选择 JPEG、WebP、GIF 时隐藏。
 - 保持原始格式时保留 PNG 选项，并注明仅对 PNG 原图生效；切换格式后保留已选方式。
 - 在压缩设置中增加明确的 PNG 压缩方式选择。

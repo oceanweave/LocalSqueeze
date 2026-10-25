@@ -1,7 +1,4 @@
 import type { ForgeConfig } from '@electron-forge/shared-types';
-import { MakerSquirrel } from '@electron-forge/maker-squirrel';
-import { MakerZIP } from '@electron-forge/maker-zip';
-import { MakerDMG } from '@electron-forge/maker-dmg';
 import { MakerDeb } from '@electron-forge/maker-deb';
 import { MakerRpm } from '@electron-forge/maker-rpm';
 import { VitePlugin } from '@electron-forge/plugin-vite';
@@ -20,24 +17,20 @@ const config: ForgeConfig = {
   },
   rebuildConfig: {},
   makers: [
-    // Windows
-    new MakerSquirrel({
-      name: "LocalSqueeze", // 确保这是驼峰式的，没有空格
-      description: "Image Compression Tool", // 使用英文描述
-      setupIcon: './src/assets/icons/win/icon.ico',
-      setupExe: 'LocalSqueeze-Setup.exe',
-      noMsi: false,
-      // 添加以下配置以解决安装程序闪退问题
-      // 移除setupExeTemplate配置，因为它不是MakerSquirrelConfig的有效属性
-      // 设置安装程序的显示名称（使用英文避免编码问题）
-      title: "LocalSqueeze",
-      // 添加额外的安装程序选项
-      noDelta: true,
-      // 设置为true以在安装后自动启动应用
-      // 移除 skipUpdateExe 配置项，因为它不是 MakerSquirrelConfig 的有效属性
-      // 添加codepage配置解决中文编码问题
-      // 移除 codepage 配置，因为它不是 MakerSquirrelConfig 的有效属性
-    }),
+    // Use canonical package names so Forge --targets keeps these options.
+    {
+      name: '@electron-forge/maker-squirrel',
+      platforms: ['win32'],
+      config: {
+        name: 'LocalSqueeze',
+        title: 'LocalSqueeze',
+        description: 'Image Compression Tool',
+        setupIcon: './src/assets/icons/win/icon.ico',
+        setupExe: 'LocalSqueeze-Setup.exe',
+        noMsi: false,
+        noDelta: true
+      }
+    },
     // 添加WiX安装程序，支持选择安装路径
     {
       name: '@electron-forge/maker-wix',
@@ -57,15 +50,15 @@ const config: ForgeConfig = {
       platforms: ['win32'] // 限制只在Windows平台上运行
     },
     // macOS
-    new MakerDMG((arch: string) => {
-      const archSuffix = arch === 'arm64' ? '-apple-silicon' : '-intel';
-      return {
-        name: `LocalSqueeze${archSuffix}`,
+    {
+      name: '@electron-forge/maker-dmg',
+      platforms: ['darwin'],
+      config: (arch: string) => ({
+        name: `LocalSqueeze-${arch === 'arm64' ? 'apple-silicon' : 'intel'}`,
         icon: './src/assets/icons/icon.icns',
         format: 'ULFO'
-      };
-    }, ['darwin']),
-    new MakerZIP({}, ['darwin']),
+      })
+    },
     // Linux
     new MakerDeb({
       options: {
@@ -80,7 +73,11 @@ const config: ForgeConfig = {
       }
     }),
     // 为所有平台创建ZIP包
-    new MakerZIP({}, ['win32', 'linux'])
+    {
+      name: '@electron-forge/maker-zip',
+      platforms: ['darwin', 'win32', 'linux'],
+      config: {}
+    }
   ],
   publishers: [
     new PublisherGithub({
