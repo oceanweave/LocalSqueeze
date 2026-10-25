@@ -100,7 +100,7 @@ export default function HomePage() {
         // 同时请求统计数据和最近图片
         const [statsResponse, recentResponse] = await Promise.all([
           window.stats.getStats(),
-          window.stats.getRecentImages(4)
+          window.stats.getRecentImages(1000)
         ]);
         
         // 确保组件仍然挂载
@@ -126,7 +126,7 @@ export default function HomePage() {
           const formattedImages: ImageItem[] = [];
           
           // 处理每张图片
-          for (const img of recentResponse.images) {
+          for (const img of recentResponse.images.filter(image => image.operation !== 'resize').slice(0, 4)) {
             try {
               // 已删除日志
               // 获取缩略图
@@ -240,7 +240,7 @@ export default function HomePage() {
     // 重新加载数据
     Promise.all([
       window.stats.getStats(),
-      window.stats.getRecentImages(4)
+      window.stats.getRecentImages(1000)
     ])
     .then(([statsResponse, recentResponse]) => {
       // 已删除日志
@@ -257,7 +257,7 @@ export default function HomePage() {
       
       // 处理最近图片数据
       if (recentResponse && recentResponse.success && Array.isArray(recentResponse.images)) {
-        Promise.all(recentResponse.images.map(async (img) => {
+        Promise.all(recentResponse.images.filter(image => image.operation !== 'resize').slice(0, 4).map(async (img) => {
           try {
             const thumbnail = await window.electron.ipcRenderer.invoke('get-image-data-url', img.outputPath);
             return {

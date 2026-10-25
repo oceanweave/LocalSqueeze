@@ -9,6 +9,7 @@ import { existsSync } from 'fs';
 
 // 定义数据结构类型
 export interface ProcessedImage {
+  operation?: 'compression' | 'resize';
   id: string;
   name: string;
   originalPath: string;
@@ -208,12 +209,20 @@ export class StorageManager {
    * 添加处理记录
    */
   public async addProcessedImage(image: ProcessedImage): Promise<void> {
+    // Resize results share export history, while compression statistics retain their meaning.
+    if (image.operation === 'resize') {
+      this.history.unshift(image);
+      this.history = this.history.slice(0, 1000);
+      await this.saveHistory();
+      return;
+    }
+
     // 添加到历史记录
     this.history.unshift(image);
     
-    // 限制历史记录数量，最多保留100条
-    if (this.history.length > 100) {
-      this.history = this.history.slice(0, 100);
+    // Retain history for both tools; each export view shows its recent 100 records.
+    if (this.history.length > 1000) {
+      this.history = this.history.slice(0, 1000);
     }
     
     // 更新统计数据

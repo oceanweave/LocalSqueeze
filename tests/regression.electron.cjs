@@ -8,7 +8,7 @@ const sharp = require('sharp');
 const root = path.join(__dirname, '..');
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'localsqueeze-regression-'));
 app.setPath('userData', temp);
-const timer = setTimeout(() => { console.error('FAIL test timeout'); app.exit(1); }, 120000);
+const timer = setTimeout(() => { console.error('FAIL test timeout'); app.exit(1); }, 180000);
 app.on('browser-window-created', (_, window) => {
   window.webContents.once('did-finish-load', async () => {
     let failures = 0;
@@ -230,6 +230,142 @@ app.on('browser-window-created', (_, window) => {
         const state = await run('({url:location.href,settings:document.body.innerText.includes("压缩预设")})');
         assert.equal(state.settings, true, state.url);
         assert.ok(state.url.includes('#/settings'));
+      });
+      const resizeInput = path.join(temp, 'resize-colors.png');
+      await sharp({ create: { width: 400, height: 300, channels: 3, background: '#ff0000' } })
+        .composite([{ input: await sharp({ create: { width: 200, height: 300, channels: 3, background: '#0000ff' } }).png().toBuffer(), left: 200, top: 0 }])
+        .png().withExif({ IFD0: { Artist: 'private-person-for-test' } }).toFile(resizeInput);
+      const resizeDefaults = { presetId: 'custom', width: 150, height: 200, dpi: 300, fit: 'crop', format: 'png', background: '#ffffff', quality: 90 };
+      const resize = (settings = {}, crop = { unit: '%', x: 0, y: 0, width: 50, height: 100 }, inputPath = resizeInput) =>
+        run(`window.electron.ipcRenderer.invoke('resize-image', ${JSON.stringify({ imagePath: inputPath, name: 'same-name.png', settings: { ...resizeDefaults, ...settings }, crop })})`);
+      await test('resize generates exact pixels and the selected region without modifying source', async () => {
+        const before = fs.readFileSync(resizeInput);
+        const left = await resize();
+        const right = await resize({}, { unit: '%', x: 50, y: 0, width: 50, height: 100 });
+        assert.equal(left.success, true, left.error);
+        assert.equal(right.success, true, right.error);
+        assert.notEqual(left.image.outputPath, right.image.outputPath, 'duplicate names get independent outputs');
+        const meta = await sharp(left.image.outputPath).metadata();
+        assert.equal(meta.width, 150); assert.equal(meta.height, 200); assert.equal(meta.density, 300);
+        assert.equal(meta.paletteBitDepth, undefined, 'resize PNG does not reduce colors');
+        assert.ok(!meta.exif?.toString().includes('private-person-for-test'), 'source EXIF is removed');
+        const red = await sharp(left.image.outputPath).removeAlpha().raw().toBuffer();
+        const blue = await sharp(right.image.outputPath).removeAlpha().raw().toBuffer();
+        assert.deepEqual([...red.subarray(0, 3)], [255, 0, 0]);
+        assert.deepEqual([...blue.subarray(0, 3)], [0, 0, 255]);
+        assert.deepEqual(fs.readFileSync(resizeInput), before);
+      });
+      await test('resize contain adds selected padding and stretch fills exact dimensions', async () => {
+        const contain = await resize({ fit: 'contain', background: '#00ff00' });
+        const stretch = await resize({ fit: 'stretch' });
+        assert.equal(contain.success, true, contain.error); assert.equal(stretch.success, true, stretch.error);
+        const padded = await sharp(contain.image.outputPath).removeAlpha().raw().toBuffer();
+        const filled = await sharp(stretch.image.outputPath).removeAlpha().raw().toBuffer();
+        assert.deepEqual([...padded.subarray(0, 3)], [0, 255, 0]);
+        assert.deepEqual([...filled.subarray(0, 3)], [255, 0, 0]);
+        assert.equal((await sharp(stretch.image.outputPath).metadata()).height, 200);
+      });
+      await test('resize normalizes EXIF orientation for both preview and crop', async () => {
+        const rotated = path.join(temp, 'resize-oriented.jpg');
+        await sharp(resizeInput).jpeg({ quality: 100 }).withMetadata({ orientation: 6 }).toFile(rotated);
+        const prepared = await run(`window.electron.ipcRenderer.invoke('prepare-resize-image', ${JSON.stringify(rotated)})`);
+        assert.equal(prepared.width, 300); assert.equal(prepared.height, 400);
+        const preview = await sharp(Buffer.from(prepared.previewUrl.split(',')[1], 'base64')).metadata();
+        assert.equal(preview.width, 300); assert.equal(preview.height, 400);
+        const result = await resize({}, { unit: '%', x: 0, y: 50, width: 100, height: 50 }, rotated);
+        assert.equal(result.success, true, result.error);
+        const pixel = await sharp(result.image.outputPath).resize(1, 1).removeAlpha().raw().toBuffer();
+        assert.ok(pixel[2] > 240 && pixel[0] < 10, 'oriented bottom half is blue');
+      });
+      await test('resize enlarges to requested pixels and handles transparent or animated input explicitly', async () => {
+        const small = path.join(temp, 'resize-transparent.png');
+        await sharp({ create: { width: 10, height: 20, channels: 4, background: '#00000000' } }).png().toFile(small);
+        const jpeg = await resize({ fit:'stretch', format:'jpeg', background:'#ffffff' }, undefined, small);
+        assert.equal(jpeg.success,true,jpeg.error);
+        const meta = await sharp(jpeg.image.outputPath).metadata();
+        assert.equal(meta.width,150);assert.equal(meta.height,200);assert.equal(meta.format,'jpeg');
+        assert.deepEqual([...(await sharp(jpeg.image.outputPath).raw().toBuffer()).subarray(0,3)],[255,255,255]);
+        const webp = await resize({fit:'contain',format:'webp'},undefined,small);
+        assert.equal((await sharp(webp.image.outputPath).metadata()).format,'webp');
+        const animated = path.join(temp,'resize-animated.gif');
+        const frames=Buffer.alloc(16*32*3,100);frames.fill(220,16*16*3);
+        await sharp(frames,{raw:{width:16,height:32,channels:3,pageHeight:16}}).gif({delay:[100,100],loop:0}).toFile(animated);
+        assert.equal((await sharp(animated,{animated:true}).metadata()).pages,2);
+        const prepared=await run(`window.electron.ipcRenderer.invoke('prepare-resize-image',${JSON.stringify(animated)})`);
+        assert.ok(prepared.warning.includes('第一帧'));
+        const result=await resize({fit:'stretch'},undefined,animated);
+        assert.equal(result.success,true,result.error);assert.ok(result.image.warning.includes('第一帧'));
+      });
+      await test('resize rejects invalid dimensions, crop, format and corrupt input', async () => {
+        for (const settings of [{ width: 0 }, { width: 1.5 }, { width: 20000, height: 20000 }, { format: 'bad' }, { dpi: 0 }]) {
+          assert.equal((await resize(settings)).success, false);
+        }
+        assert.equal((await resize({}, { unit: '%', x: 80, y: 0, width: 50, height: 100 })).success, false);
+        const invalid = path.join(temp, 'not-an-image.png');fs.writeFileSync(invalid, 'not an image');
+        assert.equal((await run(`window.electron.ipcRenderer.invoke('prepare-resize-image', ${JSON.stringify(invalid)})`)).success, false);
+      });
+      await test('resize workbench pastes multiple images and crop frame responds to real dragging', async () => {
+        await run(`document.querySelector('a[href="#/resize"]').click()`);
+        await waitFor('!!document.querySelector("#resize-workspace")', 'resize workbench');
+        const image = fs.readFileSync(resizeInput).toString('base64');
+        await run(`(() => { const data=new DataTransfer(); for(let n=0;n<2;n++) data.items.add(new File([Uint8Array.from(atob('${image}'),c=>c.charCodeAt(0))],'same.png',{type:'image/png'})); document.body.dispatchEvent(new ClipboardEvent('paste',{bubbles:true,cancelable:true,clipboardData:data})); })()`);
+        await waitFor('document.querySelectorAll("[aria-label=待处理图片] > div").length===2', 'two pasted inputs');
+        await run(`(() => { const input=document.querySelector('#resize-preset'); input.value='pixels-150-200';input.dispatchEvent(new Event('change',{bubbles:true})); })()`);
+        window.setSize(1400, 1100);
+        await run('document.querySelector("#resize-canvas").scrollIntoView({block:"center"})');
+        await sleep(100);
+        const before = await run(`(() => { const e=document.querySelector('.ReactCrop__crop-selection'), r=e.getBoundingClientRect(); return {left:e.style.left,x:r.x+r.width/2,y:r.y+r.height/2}; })()`);
+        window.webContents.sendInputEvent({type:'mouseDown',x:Math.round(before.x),y:Math.round(before.y),button:'left',clickCount:1});
+        window.webContents.sendInputEvent({type:'mouseMove',x:Math.round(before.x+35),y:Math.round(before.y)});
+        window.webContents.sendInputEvent({type:'mouseUp',x:Math.round(before.x+35),y:Math.round(before.y),button:'left',clickCount:1});
+        await sleep(100);
+        const after = await run('document.querySelector(".ReactCrop__crop-selection").style.left');
+        assert.ok(parseFloat(after)>parseFloat(before.left), 'dragging moves the selected crop');
+        const handle = await run(`(() => { const e=document.querySelector('.ReactCrop__drag-handle.ord-se'), r=e.getBoundingClientRect(); return {x:r.x+r.width/2,y:r.y+r.height/2,width:document.querySelector('.ReactCrop__crop-selection').style.width}; })()`);
+        window.webContents.sendInputEvent({type:'mouseDown',x:Math.round(handle.x),y:Math.round(handle.y),button:'left',clickCount:1});
+        window.webContents.sendInputEvent({type:'mouseMove',x:Math.round(handle.x-20),y:Math.round(handle.y-25)});
+        window.webContents.sendInputEvent({type:'mouseUp',x:Math.round(handle.x-20),y:Math.round(handle.y-25),button:'left',clickCount:1});
+        await sleep(100);
+        assert.ok(parseFloat(await run('document.querySelector(".ReactCrop__crop-selection").style.width')) < parseFloat(handle.width), 'corner handle resizes the crop');
+        await run('document.querySelector(".ReactCrop__crop-selection").focus()');
+        const keyboardBefore = parseFloat(await run('document.querySelector(".ReactCrop__crop-selection").style.left'));
+        window.webContents.sendInputEvent({type:'keyDown',keyCode:'Right'});
+        window.webContents.sendInputEvent({type:'keyUp',keyCode:'Right'});
+        await sleep(100);
+        assert.ok(parseFloat(await run('document.querySelector(".ReactCrop__crop-selection").style.left')) > keyboardBefore, 'keyboard nudges crop');
+        fs.writeFileSync(path.join(temp, 'resize-workbench.png'), (await window.webContents.capturePage()).toPNG());
+        console.log('Resize preview: ' + path.join(temp, 'resize-workbench.png'));
+      });
+      await test('resize batch and separate exports preserve workbench without changing compression stats', async () => {
+        const before = await run('window.stats.getStats()');
+        await run('document.querySelector("#resize-generate-all").click()');
+        await waitFor('document.querySelector("#resize-status").textContent.includes("成功 2 张")', 'resize batch');
+        const after = await run('window.stats.getStats()');
+        assert.equal(after.stats.totalProcessedImages, before.stats.totalProcessedImages);
+        const history = await run('window.stats.getRecentImages(1000)');
+        const resized = history.images.filter(image=>image.operation==='resize');
+        assert.equal(resized.length, 2);
+        for (const image of resized) {
+          const meta = await sharp(image.outputPath).metadata();
+          assert.equal(meta.width,150);assert.equal(meta.height,200);
+        }
+        await run(`document.querySelector('a[href="#/resize/export"]').click()`);
+        await waitFor('document.querySelectorAll("#export-workspace article").length===2', 'resize export list');
+        assert.equal(await run('document.querySelector("#export-workspace").dataset.operation'), 'resize');
+        await run(`document.querySelector('a[href="#/export"]').click()`);
+        await waitFor('document.querySelector("#export-workspace")?.dataset.operation==="compression"', 'compression export list');
+        assert.equal(await run('document.querySelectorAll("#export-workspace article").length'), history.images.length-2);
+        await run(`document.querySelector('a[href="#/resize"]').click()`);
+        await waitFor('!!document.querySelector("#resize-workspace")', 'return to workbench');
+        assert.equal(await run('document.querySelector("#resize-width").value'), '150');
+        assert.equal(await run('document.querySelectorAll("[aria-label=待处理图片] > div").length'),2);
+        assert.equal(await run('!!document.querySelector("#resize-save")'), true);
+        const destination = path.join(temp,'exported-resize');
+        const first = await run(`window.electron.ipcRenderer.invoke('export-all-files',${JSON.stringify({files:resized.map(i=>i.outputPath),outputDir:destination})})`);
+        assert.equal(first.success,true);assert.equal(first.exportedCount,2);
+        assert.equal(fs.readdirSync(destination).length,2,'same input name does not overwrite another result');
+        await run(`window.electron.ipcRenderer.invoke('export-all-files',${JSON.stringify({files:[resized[0].outputPath],outputDir:destination})})`);
+        assert.equal(fs.readdirSync(destination).length,3,'existing export remains intact');
       });
     } catch (error) { failures++; console.error(error); }
     clearTimeout(timer);

@@ -153,3 +153,22 @@ src/
 ## 🌟 支持项目
 
 如果这个项目对你有帮助，欢迎点个 star ⭐️
+
+
+## 图片尺寸处理（v1.1.0）
+
+侧边栏按工具分组：“图片压缩”保留原有压缩设置、导入和导出；“图片尺寸处理”提供独立的尺寸与裁剪工作台、导出列表。
+
+- 支持多图选择、拖放、Ctrl+V / ⌘V 粘贴和文件夹导入。
+- 选择一寸、二寸、护照数字／纸质参考、国考源照片、美国签证参考，或自定义像素（如 150×200）。
+- 拖动裁剪框移动选区，拖动边角缩放，方向键微调；每张图保留各自选区，可逐张或批量生成。
+- 支持等比裁剪、等比留白、拉伸，以及 JPEG、PNG、WebP 和打印 DPI。PNG 默认不减色；尺寸输出允许放大，会提示细节不会随放大增加。
+- 从原图生成精确像素，不使用屏幕预览图作为输出源；自动处理 EXIF 方向。设置与压缩模块独立，切换页面保留当前工作台。
+- 两个工具复用导入、文件保存和批量导出通道，按操作类型区分历史；未标记的旧历史仍属于图片压缩。尺寸处理不计入压缩节省空间统计。
+- 导出默认不覆盖同名文件，自动添加序号。生成结果保存在应用数据目录的 `resized-images/` 下，原图不被覆盖。
+
+证件照预设仅提供尺寸和构图参考，不自动换背景或审核人像。数字照和纸质照片的比例可能不同；国考照片仍需通过当年官方照片处理工具。各预设在界面内附用途说明和适用来源，查阅日期为 2026-10-26。
+
+规格参考：[一寸及考试照片](https://rsj.beijing.gov.cn/ywsite/bjpta/fwzn/cjwt/bm/cz/qgpt/202108/t20210821_2473438.html)、[2027 国考指南](https://shanghai.chinatax.gov.cn/xxgk/rsxx/202610/t481764.html)、[护照纸质照片](https://pg.china-embassy.gov.cn/lsyw/lszj/hzlxz/hzlzyq/202401/t20240103_11216467.html)、[护照数字照片](https://dj.china-embassy.gov.cn/lsfw/linshizhengjian/huzhaolvxingzheng/202311/P020231126826793735884.pdf)、[美国签证数字照片](https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/photos.html)。
+
+裁剪交互使用 [React Image Crop 11.1.2](https://www.npmjs.com/package/react-image-crop)，ISC 许可，声明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。像素输出复用项目现有 Sharp 依赖。

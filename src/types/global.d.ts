@@ -42,6 +42,7 @@ export interface CompressionResult {
 
 // 处理后的图片信息
 export interface ProcessedImage {
+  operation?: 'compression' | 'resize';
   id: string;
   name: string;
   originalPath: string;

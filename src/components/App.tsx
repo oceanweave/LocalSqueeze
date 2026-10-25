@@ -6,6 +6,8 @@ import CompressionSettings from '../views/CompressionSettings';
 import ComparisonPage from '../views/ComparisonPage';
 import ExportPage from '../views/ExportPage';
 import HelpPage from '../views/HelpPage';
+import ImageResizePage from '../views/ImageResizePage';
+import { ResizeWorkspaceProvider } from '../contexts/ResizeWorkspace';
 
 export default function App() {
   // 判断是否为生产环境
@@ -15,17 +17,21 @@ export default function App() {
   const RouterComponent = isProduction ? HashRouter : Router;
   
   return (
-    <RouterComponent>
-      <Routes>
-        <Route path="/" element={<MainLayout />}>
-          <Route index element={<HomePage />} />
-          <Route path="process" element={<ImageProcessPage />} />
-          <Route path="settings" element={<CompressionSettings />} />
-          <Route path="comparison" element={<ComparisonPage />} />
-          <Route path="export" element={<ExportPage />} />
-          <Route path="help" element={<HelpPage />} />
-        </Route>
-      </Routes>
-    </RouterComponent>
+    <ResizeWorkspaceProvider>
+      <RouterComponent>
+        <Routes>
+          <Route path="/" element={<MainLayout />}>
+            <Route index element={<HomePage />} />
+            <Route path="process" element={<ImageProcessPage />} />
+            <Route path="settings" element={<CompressionSettings />} />
+            <Route path="comparison" element={<ComparisonPage />} />
+            <Route path="export" element={<ExportPage key="compression-export" operation="compression" />} />
+            <Route path="resize" element={<ImageResizePage />} />
+            <Route path="resize/export" element={<ExportPage key="resize-export" operation="resize" />} />
+            <Route path="help" element={<HelpPage />} />
+          </Route>
+        </Routes>
+      </RouterComponent>
+    </ResizeWorkspaceProvider>
   );
 }

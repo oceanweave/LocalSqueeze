@@ -39,10 +39,10 @@ export default function MainLayout() {
           <div className="text-2xl font-bold flex items-center gap-2">
             <img 
               src={iconImage} 
-              alt="图片压缩工具" 
+              alt="LocalSqueeze 图片工具"
               className="w-8 h-8 object-contain transition-all duration-300 hover:scale-110" 
             />
-            图片压缩工具
+            LocalSqueeze 图片工具
           </div>
           <ThemeToggle isDarkMode={isDarkMode} onToggle={toggleTheme} />
         </header>
@@ -50,7 +50,7 @@ export default function MainLayout() {
         {/* 主内容区域 */}
         <div className="flex flex-1 overflow-hidden">
           {/* 侧边栏 - 固定，不随内容滚动 */}
-          <aside className="w-48 overflow-x-hidden border-r border-border flex-shrink-0 h-full overflow-y-auto">
+          <aside className="w-56 overflow-x-hidden border-r border-border flex-shrink-0 h-full overflow-y-auto">
             <Sidebar />
           </aside>
           
@@ -65,7 +65,7 @@ export default function MainLayout() {
         {/* 页脚 */}
         <footer className="bg-muted py-4 px-6 text-center text-sm text-muted-foreground border-t border-border mt-auto">
           <div className="flex justify-center items-center gap-2">
-            <span>图片压缩工具 v{version} © {new Date().getFullYear()}</span>
+            <span>LocalSqueeze 图片工具 v{version} © {new Date().getFullYear()}</span>
             <span className="inline-block w-1 h-1 rounded-full bg-primary"></span>
             <span>高效 · 简洁 · 专业</span>
           </div>

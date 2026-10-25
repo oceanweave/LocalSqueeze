@@ -43,8 +43,10 @@ const createWindow = () => {
   
   // Create the browser window.
   mainWindow = new BrowserWindow({
-    width: 900,
-    height: 800,
+    width: 1280,
+    height: 900,
+    minWidth: 900,
+    minHeight: 650,
     icon: path.join(__dirname, '../assets/icons/icon.png'),
     show: false, // 先隐藏窗口，等准备好后再显示，避免闪烁
     // 在生产环境下禁用菜单栏
@@ -338,19 +340,24 @@ app.on('ready', async () => {
 
   // 注册导出所有文件的处理程序
   ipcMain.handle('export-all-files', async (_, args) => {
+    let exportedCount = 0;
     try {
-      const { files, outputDir } = args;
-
+      const { files, outputDir, overwriteExisting = false } = args;
+      await fs.mkdir(outputDir, { recursive: true });
       for (const filePath of files) {
         const fileName = path.basename(filePath);
-        const destPath = path.join(outputDir, fileName);
-        await fs.copyFile(filePath, destPath);
+        let destination = path.join(outputDir, fileName);
+        if (!overwriteExisting) {
+          const parsed = path.parse(fileName);
+          let number = 2;
+          while (existsSync(destination)) destination = path.join(outputDir, `${parsed.name}_${number++}${parsed.ext}`);
+        }
+        if (path.resolve(filePath) !== path.resolve(destination)) await fs.copyFile(filePath, destination);
+        exportedCount++;
       }
-
-      return { success: true };
+      return { success: true, exportedCount };
     } catch (error) {
-      // 已删除日志
-      return { success: false, error: error.message };
+      return { success: false, exportedCount, error: error.message };
     }
   });
 

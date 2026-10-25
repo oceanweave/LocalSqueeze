@@ -140,7 +140,14 @@ const HelpPage: React.FC = () => {
     <div className="container mx-auto p-6 max-w-5xl">
       <div className="mb-6">
         <h1 className="text-3xl font-bold mb-2">帮助中心</h1>
-        <p className="text-muted-foreground">获取使用图片压缩工具的帮助和支持。</p>
+        <p className="text-muted-foreground">获取图片压缩、证件照裁剪与像素调整的使用帮助。</p>
+        <div className="mt-4 rounded-lg border border-border bg-card p-4 text-sm space-y-2">
+          <p className="font-semibold">图片尺寸处理</p>
+          <p>侧边栏按“图片压缩”和“图片尺寸处理”分组。进入“尺寸与裁剪”，选择一寸、二寸、护照或国考参考预设，也可输入 150 × 200 等自定义像素。</p>
+          <p>支持选图、拖入、粘贴和文件夹导入。拖动裁剪框移动选区，拖动边角缩放，方向键可微调。每张图片保留各自裁剪框，可逐张生成或批量生成。</p>
+          <p>“等比留白”保留全图，“拉伸铺满”可能改变比例。生成结果可直接保存，或在尺寸处理的“导出管理”批量导出。两个工具的结果分别显示，切换页面不会清空当前尺寸处理工作台。</p>
+          <p>预设只处理尺寸，不自动换背景或审核人像；国考照片仍须使用官方审核工具。数字照与纸质照规格可能不同，请查看预设旁的来源。DPI 影响打印尺寸，不自动改变像素宽高。</p>
+        </div>
       </div>
 
       {/* 搜索框 */}

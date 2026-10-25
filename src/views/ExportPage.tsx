@@ -1,398 +1,82 @@
-import React, { useState, useEffect } from 'react';
-import { Button, Checkbox, Input } from '../components/ui';
-import { RadioGroup } from '../components/ui/radio-group';
-import { Radio } from '../components/ui/radio';
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../components/ui/select';
-import { cn } from '../lib/utils';
-// eslint-disable-next-line import/no-unresolved
-import { ProcessedImage } from '../types/global'
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Download, FolderOpen, RefreshCw } from 'lucide-react';
+import { formatFileSize } from '../lib/utils';
+import type { ProcessedImage } from '../types/global';
 
-const ExportPage: React.FC = () => {
-  // 状态管理
-  const [processedImages, setProcessedImages] = useState<ProcessedImage[]>([]);
-  const [selectedImages, setSelectedImages] = useState<string[]>([]);
-  const [stats, setStats] = useState({
-    totalOriginalSize: 0,
-    totalCompressedSize: 0,
-    totalSavedSpace: 0,
-  });
-  const [exportSettings, setExportSettings] = useState({
-    outputDirectory: '',
-    fileNaming: '{filename}',
-    exportFormat: 'original',
-    overwriteExisting: false,
-    openAfterExport: true,
-    saveAsDefault: false,
-  });
-  const [isLoading, setIsLoading] = useState(true);
-
-  // 加载所有处理过的图片
+const buttonClass = 'inline-flex items-center justify-center gap-2 rounded-md border border-border px-3 py-2 text-sm hover:bg-accent disabled:opacity-50';
+const primaryClass = buttonClass + ' bg-primary text-primary-foreground hover:bg-primary/90';
+type ExportImage = ProcessedImage & { previewUrl?: string };
+export default function ExportPage({ operation = 'compression' }: { operation?: 'compression' | 'resize' }) {
+  const [images, setImages] = useState<ExportImage[]>([]);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [directory, setDirectory] = useState('');
+  const [overwrite, setOverwrite] = useState(false);
+  const [openAfter, setOpenAfter] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
+  const [message, setMessage] = useState('');
+  const [revision, setRevision] = useState(0);
   useEffect(() => {
-    const loadImages = async () => {
-      setIsLoading(true);
-      try {
-        // 获取所有处理过的图片（这里使用100作为限制，实际上是获取全部）
-        const result = await window.stats.getRecentImages(100);
-        if (result.success && result.images) {
-          setProcessedImages(result.images);
-          
-          // 计算统计数据
-          const totalOriginalSize = result.images.reduce((sum, img) => sum + img.originalSize, 0);
-          const totalCompressedSize = result.images.reduce((sum, img) => sum + img.compressedSize, 0);
-          
-          setStats({
-            totalOriginalSize,
-            totalCompressedSize,
-            totalSavedSpace: totalOriginalSize - totalCompressedSize
-          });
-          
-          // 默认全选所有图片
-          setSelectedImages(result.images.map(img => img.id));
-        }
-      } catch (error) {
-        console.error('加载图片失败:', error);
-      } finally {
-        setIsLoading(false);
+    let active = true;
+    setLoading(true);
+    window.stats.getRecentImages(1000).then(async result => {
+      if (!result.success) throw new Error(result.error || '加载处理记录失败');
+      const records = result.images.filter(image => (image.operation || 'compression') === operation).slice(0, 100);
+      if (!active) return;
+      setImages(records);
+      setSelected(records.map(image => image.id));
+      // Resolve previews independently so the list is usable before all thumbnails load.
+      for (const image of records) {
+        const previewUrl = await window.electron.ipcRenderer.invoke('get-image-thumbnail', image.outputPath);
+        if (!active) return;
+        setImages(previous => previous.map(item => item.id === image.id ? { ...item, previewUrl } : item));
       }
-    };
-    
-    loadImages();
-  }, []);
-
-  // 选择输出目录
-  const selectOutputDirectory = async () => {
-    try {
-      const outputDir = await window.compression.selectOutputDirectory();
-      if (outputDir) {
-        setExportSettings(prev => ({
-          ...prev,
-          outputDirectory: outputDir
-        }));
-      }
-    } catch (error) {
-      console.error('选择输出目录失败:', error);
-    }
+    }).catch(error => { if (active) setMessage(error instanceof Error ? error.message : '加载失败'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [operation, revision]);
+  const chooseDirectory = async () => {
+    try { const path = await window.compression.selectOutputDirectory(); if (path) setDirectory(path); }
+    catch (error) { setMessage(`选择目录失败：${String(error)}`); }
   };
-
-  // 导出选中的图片
-  const exportSelectedImages = async () => {
+  const exportImages = async () => {
+    if (!directory || !selected.length || exporting) return;
+    setExporting(true);
     try {
-      if (!exportSettings.outputDirectory) {
-        alert('请先选择导出目录');
-        return;
-      }
-      
-      if (selectedImages.length === 0) {
-        alert('请至少选择一张图片');
-        return;
-      }
-      
-      // 获取选中图片的输出路径
-      const selectedFiles = processedImages
-        .filter(img => selectedImages.includes(img.id))
-        .map(img => img.outputPath);
-      
-      // 调用导出函数
-      await window.electron.ipcRenderer.invoke('export-all-files', {
-        files: selectedFiles,
-        outputDir: exportSettings.outputDirectory
+      const result = await window.electron.ipcRenderer.invoke('export-all-files', {
+        files: images.filter(image => selected.includes(image.id)).map(image => image.outputPath), outputDir: directory, overwriteExisting: overwrite
       });
-      
-      alert(`已成功导出 ${selectedFiles.length} 张图片到: ${exportSettings.outputDirectory}`);
-      
-      // 如果设置了导出后打开文件夹
-      if (exportSettings.openAfterExport) {
-        await window.electron.ipcRenderer.invoke('show-item-in-folder', exportSettings.outputDirectory);
-      }
-    } catch (error) {
-      console.error('导出图片失败:', error);
-      alert('导出图片失败');
-    }
+      if (!result.success) throw new Error(`${result.error || '导出失败'}（已导出 ${result.exportedCount || 0} 张）`);
+      setMessage(`成功导出 ${result.exportedCount} 张图片到 ${directory}`);
+      if (openAfter) await window.electron.ipcRenderer.invoke('show-item-in-folder', directory);
+    } catch (error) { setMessage(error instanceof Error ? error.message : '导出失败'); }
+    finally { setExporting(false); }
   };
-
-  // 全选/取消全选
-  const toggleSelectAll = () => {
-    if (selectedImages.length === processedImages.length) {
-      setSelectedImages([]);
-    } else {
-      setSelectedImages(processedImages.map(img => img.id));
-    }
+  const saveOne = async (image: ProcessedImage) => {
+    try {
+      const result = await window.electron.ipcRenderer.invoke('save-file', { sourcePath: image.outputPath, suggestedName: image.name });
+      if (result.success) setMessage(`已保存到 ${result.path}`);
+      else if (result.error) setMessage(`保存失败：${result.error}`);
+    } catch (error) { setMessage(`保存失败：${String(error)}`); }
   };
-
-  // 选择已压缩的图片
-  const selectCompressedOnly = () => {
-    const compressedImages = processedImages
-      .filter(img => img.originalSize > img.compressedSize)
-      .map(img => img.id);
-    setSelectedImages(compressedImages);
-  };
-
-  // 切换单个图片的选择状态
-  const toggleImageSelection = (id: string) => {
-    if (selectedImages.includes(id)) {
-      setSelectedImages(selectedImages.filter(imgId => imgId !== id));
-    } else {
-      setSelectedImages([...selectedImages, id]);
-    }
-  };
-
-  // 移除图片
-  const removeImage = (id: string) => {
-    setProcessedImages(processedImages.filter(img => img.id !== id));
-    setSelectedImages(selectedImages.filter(imgId => imgId !== id));
-  };
-
-  // 格式化文件大小
-  const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
-  };
-
-  return (
-    <div className="container mx-auto px-4 py-6">
-      <h1 className="text-2xl font-bold mb-4 text-foreground">导出管理</h1>
-      <p className="text-muted-foreground mb-6">管理和导出您处理过的图片</p>
-      
-      {/* 导出概览 */}
-      <div className="bg-card rounded-lg shadow p-6 mb-6">
-          <h2 className="text-lg font-semibold mb-4 text-foreground">导出概览</h2>
-        <div className="grid grid-cols-3 gap-4">
-          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4 rounded-lg">
-              <p className="text-blue-600 dark:text-blue-400">可导出图片</p>
-              <p className="text-2xl font-bold text-blue-800 dark:text-blue-200">{processedImages.length}</p>
-          </div>
-          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4 rounded-lg">
-              <p className="text-blue-600 dark:text-blue-400">原始总大小</p>
-              <p className="text-2xl font-bold text-blue-800 dark:text-blue-200">{formatFileSize(stats.totalOriginalSize)}</p>
-          </div>
-          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4 rounded-lg">
-              <p className="text-blue-600 dark:text-blue-400">压缩后总大小</p>
-              <p className="text-2xl font-bold text-blue-800 dark:text-blue-200">{formatFileSize(stats.totalCompressedSize)}</p>
-          </div>
-        </div>
-      </div>
-      
-      {/* 导出设置 */}
-      <div className="bg-card rounded-lg shadow p-6 mb-6">
-          <h2 className="text-lg font-semibold mb-4 text-foreground">导出设置</h2>
-        
-        {/* 导出位置 */}
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-foreground mb-1">导出位置</label>
-          <div className="flex">
-            <Input 
-              value={exportSettings.outputDirectory} 
-              readOnly 
-              placeholder="请选择导出目录" 
-              className="flex-1 mr-2" 
-            />
-            <Button onClick={selectOutputDirectory} className="cursor-pointer">选择目录</Button>
-          </div>
-        </div>
-        
-
-        
-        {/* 文件命名（已禁用） */}
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-muted-foreground mb-1">文件命名（暂不可用）</label>
-          <Input 
-            value={exportSettings.fileNaming}
-            disabled={true}
-            placeholder="例如: {filename}_exported"
-            className="w-full mb-1 opacity-70 cursor-not-allowed"
-          />
-          <p className="text-xs text-muted-foreground">可用变量: {'{filename}'} - 原始文件名, {'{date}'} - 当前日期, {'{time}'} - 当前时间</p>
-        </div>
-        
-        {/* 导出格式 */}
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-foreground mb-2">导出格式</label>
-          <RadioGroup 
-            value={exportSettings.exportFormat}
-            onValueChange={(value) => setExportSettings(prev => ({ ...prev, exportFormat: value }))}
-            className="flex flex-wrap gap-4"
-          >
-            <div className="flex items-center">
-              <Radio 
-                id="formatOriginal" 
-                value="original"
-              />
-              <label htmlFor="formatOriginal" className="ml-2 text-sm text-foreground">原始格式</label>
-            </div>
-            <div className="flex items-center">
-              <Radio 
-                id="formatJpeg" 
-                value="jpeg"
-              />
-              <label htmlFor="formatJpeg" className="ml-2 text-sm text-foreground">JPEG</label>
-            </div>
-            <div className="flex items-center">
-              <Radio 
-                id="formatPng" 
-                value="png"
-              />
-              <label htmlFor="formatPng" className="ml-2 text-sm text-foreground">PNG</label>
-            </div>
-            <div className="flex items-center">
-              <Radio 
-                id="formatWebp" 
-                value="webp"
-              />
-              <label htmlFor="formatWebp" className="ml-2 text-sm text-foreground">WebP</label>
-            </div>
-          </RadioGroup>
-        </div>
-        
-        {/* 其他选项 */}
-        <div className="space-y-2">
-          <div>
-            <Checkbox 
-              id="overwriteExisting"
-              checked={exportSettings.overwriteExisting}
-              onCheckedChange={(checked) => 
-                setExportSettings(prev => ({ ...prev, overwriteExisting: !!checked }))
-              }
-            />
-            <label htmlFor="overwriteExisting" className="ml-2 text-sm text-foreground">
-                覆盖已存在的文件
-              </label>
-          </div>
-          <div>
-            <Checkbox 
-              id="openAfterExport"
-              checked={exportSettings.openAfterExport}
-              onCheckedChange={(checked) => 
-                setExportSettings(prev => ({ ...prev, openAfterExport: !!checked }))
-              }
-            />
-            <label htmlFor="openAfterExport" className="ml-2 text-sm text-foreground">
-                导出后打开文件夹
-              </label>
-          </div>
-          <div>
-            <Checkbox 
-              id="saveAsDefault"
-              checked={exportSettings.saveAsDefault}
-              onCheckedChange={(checked) => 
-                setExportSettings(prev => ({ ...prev, saveAsDefault: !!checked }))
-              }
-            />
-            <label htmlFor="saveAsDefault" className="ml-2 text-sm text-foreground">
-                保存为默认设置
-              </label>
-          </div>
-        </div>
-      </div>
-      
-      {/* 待导出图片列表 */}
-      <div className="bg-card rounded-lg shadow p-6">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold text-foreground">待导出图片 ({selectedImages.length}/{processedImages.length})</h2>
-          <div className="flex space-x-2">
-            <Button variant="outline" size="sm" onClick={toggleSelectAll} className="cursor-pointer">
-              {selectedImages.length === processedImages.length ? '取消全选' : '全选'}
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => setSelectedImages([])} className="cursor-pointer">取消选择</Button>
-            <Button variant="outline" size="sm" onClick={selectCompressedOnly} className="cursor-pointer">仅选择已压缩</Button>
-          </div>
-        </div>
-        
-        {isLoading ? (
-          <div className="text-center py-10">
-            <p className="text-foreground">加载中...</p>
-          </div>
-        ) : processedImages.length === 0 ? (
-          <div className="text-center py-10">
-            <p className="text-muted-foreground">没有可导出的图片</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {processedImages.map(image => (
-              <div 
-                key={image.id} 
-                className={cn(
-                  "border rounded-lg overflow-hidden",
-                  selectedImages.includes(image.id) ? "border-primary" : "border-border"
-                )}
-              >
-                <div className="relative">
-                  <div className="absolute top-2 left-2">
-                    <Checkbox
-                      checked={selectedImages.includes(image.id)}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
-                          setSelectedImages([...selectedImages, image.id]);
-                        } else {
-                          setSelectedImages(selectedImages.filter(imgId => imgId !== image.id));
-                        }
-                      }}
-                      className="h-5 w-5 bg-white/90"
-                    />
-                  </div>
-                  <img 
-                    src={`file://${image.outputPath}`} 
-                    alt={image.name}
-                    className="w-full h-40 object-cover cursor-pointer"
-                    onClick={() => toggleImageSelection(image.id)}
-                    onError={(e) => {
-                      // 图片加载失败时显示占位图
-                      (e.target as HTMLImageElement).src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0OCIgaGVpZ2h0PSI0OCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiM4ODgiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cmVjdCB4PSIzIiB5PSIzIiB3aWR0aD0iMTgiIGhlaWdodD0iMTgiIHJ4PSIyIiByeT0iMiI+PC9yZWN0PjxjaXJjbGUgY3g9IjguNSIgY3k9IjguNSIgcj0iMS41Ij48L2NpcmNsZT48cG9seWxpbmUgcG9pbnRzPSIyMSAxNSAxNiAxMCA1IDIxIj48L3BvbHlsaW5lPjwvc3ZnPg==';
-                    }}
-                  />
-                </div>
-                <div className="p-3 bg-card">
-                    <p className="font-medium truncate text-foreground" title={image.name}>{image.name}</p>
-                    {image.warning && <p className="text-xs text-amber-700 mt-1">{image.warning}</p>}
-                    <div className="text-sm text-muted-foreground mt-1">
-                    <p>
-                      {formatFileSize(image.originalSize)} → {formatFileSize(image.compressedSize)}
-                      <span className="ml-2 text-green-600 dark:text-green-400">{image.compressionRate}</span>
-                    </p>
-                    <p>{image.width} × {image.height} · {image.format.toUpperCase()}</p>
-                  </div>
-                  <div className="flex justify-between mt-2">
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      onClick={() => window.electron.ipcRenderer.invoke('open-file', image.outputPath)}
-                      className="cursor-pointer"
-                    >
-                      预览
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      onClick={() => removeImage(image.id)}
-                      className="cursor-pointer"
-                    >
-                      移除
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-        
-        {/* 底部操作按钮 */}
-        <div className="mt-6 flex justify-between">
-         <div className='flex items-center'>
-           <Button 
-            onClick={exportSelectedImages}
-            disabled={selectedImages.length === 0 || !exportSettings.outputDirectory}
-            className={selectedImages.length === 0 || !exportSettings.outputDirectory ? "cursor-not-allowed" : "cursor-pointer"}
-          >
-            导出选中图片 ({selectedImages.length})
-          </Button>
-          {!exportSettings.outputDirectory ? (
-            <div className="text-red-500 text-sm ml-2">请先选择导出目录</div>
-          ) : null}
-         </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-export default ExportPage;
+  const toggle = (id: string) => setSelected(previous => previous.includes(id) ? previous.filter(item => item !== id) : [...previous, id]);
+  const total = images.filter(image => selected.includes(image.id)).reduce((sum, image) => sum + image.compressedSize, 0);
+  return <div className="space-y-6" id="export-workspace" data-operation={operation}>
+    <div className="flex flex-wrap justify-between gap-3"><div><h1 className="text-3xl font-bold">{operation === 'resize' ? '尺寸处理导出' : '压缩导出管理'}</h1><p className="text-muted-foreground mt-2">仅显示{operation === 'resize' ? '尺寸处理' : '图片压缩'}结果，最多显示最近 100 张。</p></div><Link to={operation === 'resize' ? '/resize' : '/process'} className={buttonClass}>返回{operation === 'resize' ? '尺寸处理' : '图片压缩'}</Link></div>
+    <section className="rounded-xl border border-border bg-card p-5 space-y-4">
+      <div className="flex flex-wrap gap-3 items-center"><FolderOpen className="text-primary" size={22} /><input aria-label="导出目录" className="flex-1 min-w-48 rounded-md border border-border bg-background px-3 py-2" value={directory} readOnly placeholder="请选择导出目录" /><button className={buttonClass} onClick={chooseDirectory} disabled={exporting}>选择目录</button></div>
+      <div className="flex flex-wrap gap-5 text-sm"><label className="flex items-center gap-2"><input type="checkbox" checked={overwrite} disabled={exporting} onChange={event => setOverwrite(event.target.checked)} />覆盖同名文件</label><label className="flex items-center gap-2"><input type="checkbox" checked={openAfter} onChange={event => setOpenAfter(event.target.checked)} />导出后打开文件夹</label></div>
+      <p className="text-xs text-muted-foreground">按处理时的格式和尺寸导出，不再次压缩。未开启覆盖时，同名文件会自动添加序号。</p>
+      <button id="export-selected" className={primaryClass} disabled={exporting || !directory || !selected.length} onClick={exportImages}><Download size={16} />{exporting ? '正在导出…' : `导出所选 ${selected.length} 张 · ${formatFileSize(total)}`}</button>
+    </section>
+    <section className="rounded-xl border border-border bg-card p-5 space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-lg font-semibold">处理结果（{selected.length} / {images.length}）</h2><div className="flex flex-wrap gap-2"><button className={buttonClass} onClick={() => setSelected(selected.length === images.length ? [] : images.map(image => image.id))}>{selected.length === images.length && images.length ? '取消全选' : '全选'}</button>{operation === 'compression' && <button className={buttonClass} onClick={() => setSelected(images.filter(image => image.compressedSize < image.originalSize).map(image => image.id))}>仅选择体积减小的图片</button>}<button className={buttonClass} disabled={loading} onClick={() => setRevision(previous => previous + 1)}><RefreshCw size={14} />刷新</button></div></div>
+      {!images.length ? <p className="text-muted-foreground py-10 text-center">{loading ? '正在加载…' : '暂无处理结果，请先导入图片并生成。'}</p> : <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">{images.map(image => <article key={image.id} data-image-id={image.id} className={'rounded-lg border overflow-hidden ' + (selected.includes(image.id) ? 'border-primary' : 'border-border')}>
+        <label className="block relative cursor-pointer"><input type="checkbox" aria-label={`选择 ${image.name}`} className="absolute left-3 top-3 accent-primary" checked={selected.includes(image.id)} onChange={() => toggle(image.id)} />{image.previewUrl ? <img src={image.previewUrl} alt={image.name} className="w-full h-44 object-contain bg-muted" /> : <div className="h-44 bg-muted" />}</label>
+        <div className="p-4 space-y-2"><p className="font-medium truncate" title={image.name}>{image.name}</p><p className="text-sm text-muted-foreground">{image.width} × {image.height} px · {image.format.toUpperCase()} · {formatFileSize(image.compressedSize)}</p>{operation === 'compression' && <p className="text-sm text-muted-foreground">{formatFileSize(image.originalSize)} → {formatFileSize(image.compressedSize)} · {image.compressionRate}</p>}{image.warning && <p className="text-sm text-amber-700">{image.warning}</p>}<div className="flex gap-2"><button className={buttonClass} onClick={() => saveOne(image)}>另存为</button><button className={buttonClass} onClick={() => window.electron.ipcRenderer.invoke('open-file', image.outputPath)}>预览</button><button className={buttonClass} onClick={() => { setImages(previous => previous.filter(item => item.id !== image.id)); setSelected(previous => previous.filter(id => id !== image.id)); }}>移出列表</button></div></div>
+      </article>)}</div>}
+    </section>
+    <p role="status" aria-live="polite" className="text-sm text-muted-foreground">{message}</p>
+  </div>;
+}
