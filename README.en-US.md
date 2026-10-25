@@ -21,6 +21,7 @@
 - **🔐 Security First**: All operations are completed locally with zero data leakage risk
 - **🔍 High-Quality Compression** - Intelligent compression algorithms that minimize file size while maintaining image quality
 - **🚀 Batch Processing** - Process multiple images simultaneously to improve work efficiency
+- **📋 Paste to Compress** - Press Ctrl+V (Windows/Linux) or ⌘V (macOS) on Home or Image Processing to compress clipboard images and screenshots using your current settings; additional pastes queue while compression is running
 - **🎨 Experience First**: Intuitive interface design with smooth operation experience
 - **🔧 Flexible Configuration**: Rich compression parameters to meet professional user needs
 - **🌍 Cross-Platform**: Supports Windows, macOS mainstream platforms

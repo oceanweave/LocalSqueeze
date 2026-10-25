@@ -67,6 +67,20 @@ const createWindow = () => {
     },
   });
 
+  // Dispatch a native paste even when the upload area has focus instead of a
+  // text field. The renderer's paste handler decides whether to import images.
+  const contents = mainWindow.webContents;
+  contents.on('before-input-event', (event, input) => {
+    const pasteModifier = process.platform === 'darwin'
+      ? input.meta && !input.control
+      : input.control && !input.meta;
+    if (input.type === 'keyDown' && input.key.toLowerCase() === 'v' &&
+      pasteModifier && !input.alt && !input.shift && !input.isComposing) {
+      event.preventDefault();
+      contents.paste();
+    }
+  });
+
   // 只在开发环境下打开开发者工具
   if (!isProduction) {
     mainWindow.webContents.openDevTools();

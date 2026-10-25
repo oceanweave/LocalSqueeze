@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Images, Package, Search, Repeat, Smartphone, Lock, FileImage, Upload, X, Download, Eye, FolderOpen } from 'lucide-react';
 import { formatFileSize, getCompressionSettings, buildCompressionSettings } from '../lib/utils';
+import { useImagePaste } from '../hooks/useImagePaste';
 // eslint-disable-next-line import/no-unresolved
 import { CompressionSettings, CompressionResult } from '../types/global';
 
@@ -44,6 +45,11 @@ export default function HomePage() {
   const [processingProgress, setProcessingProgress] = useState<{current: number, total: number}>({ current: 0, total: 0 });
   const [processedFileNames, setProcessedFileNames] = useState<Set<string>>(new Set());
   const [showQuickProcess, setShowQuickProcess] = useState(true);
+
+  useImagePaste(images => {
+    setFiles(prevFiles => [...prevFiles, ...images]);
+    setShowQuickProcess(true);
+  });
   
   // 压缩设置
   const [compressionSettings, setCompressionSettings] = useState<CompressionSettings>({
@@ -635,6 +641,9 @@ export default function HomePage() {
               <p className="text-lg font-medium text-foreground mb-4">
                  拖拽图片到此处或点击选择文件
                </p>
+              <p className="text-sm text-muted-foreground mb-4">
+                也可按 Ctrl+V / ⌘V 粘贴截图或复制的图片，自动压缩
+              </p>
               <input
                 type="file"
                 multiple

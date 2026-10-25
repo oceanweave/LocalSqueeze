@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { X, Upload, Download, Eye } from 'lucide-react';
 import { formatFileSize, calculateCompressionRate, getCompressionSettings, buildCompressionSettings } from '../lib/utils';
+import { useImagePaste } from '../hooks/useImagePaste';
 // eslint-disable-next-line import/no-unresolved
 import { CompressionSettings, CompressionResult } from '../types/global';
 
@@ -13,6 +14,7 @@ function getBasename(filepath: string): string {
 export default function ImageProcessPage() {
   const navigate = useNavigate();
   const [files, setFiles] = useState<File[]>([]);
+  const [pendingPastedFiles, setPendingPastedFiles] = useState<File[]>([]);
   const [processedFiles, setProcessedFiles] = useState<any[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -27,6 +29,12 @@ export default function ImageProcessPage() {
   
   // 添加处理模式状态：'images' 或 'folder'
   const [processingMode, setProcessingMode] = useState<'images' | 'folder'>('images');
+
+  useImagePaste(images => {
+    setProcessingMode('images');
+    setFiles(prevFiles => [...prevFiles, ...images]);
+    setPendingPastedFiles(previous => [...previous, ...images]);
+  });
   
   // 跟踪未处理的文件
   const [processedFileNames, setProcessedFileNames] = useState<Set<string>>(new Set());
@@ -241,29 +249,32 @@ export default function ImageProcessPage() {
   
   // 删除文件
   const removeFile = (index: number) => {
+    setPendingPastedFiles(previous => previous.filter(file => file !== files[index]));
     setFiles(prevFiles => prevFiles.filter((_, i) => i !== index));
   };
 
   // 清除所有文件
   const clearAllFiles = () => {
+    setPendingPastedFiles([]);
     setFiles([]);
     setProcessedFiles([]);
     setProcessedFileNames(new Set());
   };
 
   // 处理图片
-  const processImages = async () => {
+  const processImages = async (selectedFiles: File[] = files) => {
     // 声明validPaths变量，确保在整个函数作用域中可用
     let validPaths: string[] = [];
     
     // 检查是否有文件需要处理
-    if (files.length === 0) {
+    if (isProcessing) return;
+    if (selectedFiles.length === 0) {
       alert('请先上传图片再进行处理');
       return;
     }
     
     // 检查是否有未处理的文件
-    const unprocessedFiles = files.filter(file => !processedFileNames.has(file.name));
+    const unprocessedFiles = selectedFiles.filter(file => !processedFileNames.has(file.name));
     if (unprocessedFiles.length === 0) {
       alert('所有文件已处理完成');
       return;
@@ -517,6 +528,17 @@ export default function ImageProcessPage() {
     }
   };
 
+  // Pasted images start immediately, or wait for the current compression to finish.
+  // Remove them from the pending queue first so failures can be retried manually.
+  useEffect(() => {
+    if (isProcessing || pendingPastedFiles.length === 0) return;
+    const pending = pendingPastedFiles.filter(file =>
+      files.includes(file) && !processedFileNames.has(file.name)
+    );
+    setPendingPastedFiles([]);
+    if (pending.length > 0) void processImages(pending);
+  }, [pendingPastedFiles, isProcessing, files, processedFileNames]);
+
   // 获取文件扩展名
   const getFileExtension = (fileName: string): string => {
     return fileName.split('.').pop()?.toUpperCase() || '';
@@ -639,6 +661,9 @@ export default function ImageProcessPage() {
                     ? '拖拽图片到这里，或点击选择文件' 
                     : '拖拽文件夹到这里，或点击选择文件夹'}
                 </div>
+                <p className="text-sm text-muted-foreground">
+                  按 Ctrl+V / ⌘V 粘贴截图或复制的图片，自动压缩
+                </p>
                 {processingMode === 'images' ? (
                   <label className="px-6 py-3 bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 transition-colors cursor-pointer">
                     选择文件
@@ -811,7 +836,7 @@ export default function ImageProcessPage() {
             
             <div className="flex justify-center mb-4">
               <button 
-                onClick={processImages}
+                onClick={() => processImages()}
                 disabled={isProcessing || files.length === 0 || !hasUnprocessedFiles}
                 className={`w-full py-3 rounded-md font-medium transition-all duration-200 text-lg
                   ${!isProcessing && files.length > 0 && hasUnprocessedFiles 

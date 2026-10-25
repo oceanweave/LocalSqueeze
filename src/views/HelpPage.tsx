@@ -214,6 +214,7 @@ const HelpPage: React.FC = () => {
               </div>
               <div className="ml-11">
                 <p>您可以通过拖拽图片到上传区域，或点击"选择文件"按钮来上传图片。支持JPG、PNG、GIF、WebP等常见图片格式。</p>
+                <p>也可以复制图片或截图，在首页或“图片处理”页按 Ctrl+V（Windows/Linux）或 ⌘V（macOS）粘贴，图片会按当前压缩设置自动处理。压缩过程中继续粘贴的图片会排队处理。</p>
                 {/* <div className="my-4 bg-muted rounded-md p-2 text-center text-muted-foreground">[图片上传示例]</div> */}
                 <p>上传完成后，您可以在列表中看到所有已上传的图片，包括它们的预览缩略图和基本信息。</p>
               </div>
