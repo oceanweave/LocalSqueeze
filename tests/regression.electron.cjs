@@ -23,7 +23,7 @@ app.on('browser-window-created', (_, window) => {
     };
     const test = async (name, fn) => {
       try { await fn(); console.log(`PASS ${name}`); }
-      catch (error) { failures++; console.error(`FAIL ${name}: ${error.message}`); }
+      catch (error) { failures++; console.error(`FAIL ${name}: ${error.stack || error.message}`); }
     };
     try {
       await waitFor('!!window.compression && !!document.querySelector("nav")', 'app ready');
@@ -310,7 +310,8 @@ app.on('browser-window-created', (_, window) => {
         const image = fs.readFileSync(resizeInput).toString('base64');
         await run(`(() => { const data=new DataTransfer(); for(let n=0;n<2;n++) data.items.add(new File([Uint8Array.from(atob('${image}'),c=>c.charCodeAt(0))],'same.png',{type:'image/png'})); document.body.dispatchEvent(new ClipboardEvent('paste',{bubbles:true,cancelable:true,clipboardData:data})); })()`);
         await waitFor('document.querySelectorAll("[aria-label=待处理图片] > div").length===2', 'two pasted inputs');
-        await run(`(() => { const input=document.querySelector('#resize-preset'); input.value='pixels-150-200';input.dispatchEvent(new Event('change',{bubbles:true})); })()`);
+        await run('document.querySelector("#resize-mode-dimensions").click()');
+        await run('document.querySelector("#resize-pixels-150x200").click()');
         window.setSize(1400, 1100);
         await run('document.querySelector("#resize-canvas").scrollIntoView({block:"center"})');
         await sleep(100);
@@ -366,6 +367,93 @@ app.on('browser-window-created', (_, window) => {
         assert.equal(fs.readdirSync(destination).length,2,'same input name does not overwrite another result');
         await run(`window.electron.ipcRenderer.invoke('export-all-files',${JSON.stringify({files:[resized[0].outputPath],outputDir:destination})})`);
         assert.equal(fs.readdirSync(destination).length,3,'existing export remains intact');
+      });
+      const field = (selector,value) => run(`(()=>{const input=document.querySelector(${JSON.stringify(selector)});Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,${JSON.stringify(String(value))});input.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+      const select = (selector,value) => run(`(()=>{const input=document.querySelector(${JSON.stringify(selector)});input.value=${JSON.stringify(value)};input.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+      const generate = async () => {
+        const before=await run('window.stats.getRecentImages(1)');
+        await run('document.querySelector("#resize-generate").click()');
+        await waitFor(`!document.querySelector('#resize-generate').disabled && document.querySelector('#resize-status').textContent.includes('成功 1 张')`,'generate required size',400);
+        const after=await run('window.stats.getRecentImages(1)');
+        assert.notEqual(after.images[0].id,before.images[0]?.id,'a new result was generated');return after.images[0];
+      };
+      await test('requirement UI hides technical settings and one-inch needs only its preset',async()=>{
+        await run('document.querySelector("#resize-mode-photo").click()');await select('#resize-preset','one-inch');
+        assert.equal(await run('document.querySelector("#resize-advanced").open'),false);
+        assert.equal(await run('document.querySelector("#resize-dpi").checkVisibility()'),false);
+        assert.equal(await run('!!document.querySelector("#resize-width")'),false);
+        assert.equal(await run('document.querySelector("#resize-compression-enabled").checked'),false);
+        const result=await generate();assert.equal(result.width,295);assert.equal(result.height,413);
+      });
+      await test('physical dimensions convert units without changing the requested print size',async()=>{
+        await run('document.querySelector("#resize-mode-dimensions").click()');await select('#resize-unit','cm');
+        await field('#resize-width',3);await field('#resize-height',4);
+        let result=await generate();assert.equal(result.width,354);assert.equal(result.height,472);
+        await select('#resize-unit','mm');
+        assert.equal(await run('document.querySelector("#resize-width").value'),'30');
+        assert.equal(await run('document.querySelector("#resize-height").value'),'40');
+        await run('document.querySelector("#resize-advanced").open=true');await field('#resize-dpi',600);
+        result=await generate();assert.equal(result.width,709);assert.equal(result.height,945);
+        await field('#resize-dpi',300);await run('document.querySelector("#resize-advanced").open=false');
+      });
+      await test('one-side and maximum-size requirements retain the entire image',async()=>{
+        await select('#resize-unit','px');await select('#resize-dimension-policy','width');await field('#resize-width',150);
+        let result=await generate();assert.equal(result.width,150);assert.equal(result.height,113);
+        assert.equal(await run('!!document.querySelector(".ReactCrop__crop-selection")'),false);
+        await select('#resize-dimension-policy','height');await field('#resize-height',200);
+        result=await generate();assert.equal(result.width,267);assert.equal(result.height,200);
+        await select('#resize-dimension-policy','within');await field('#resize-width',100);await field('#resize-height',100);
+        result=await generate();assert.equal(result.width,100);assert.equal(result.height,75);
+      });
+      await test('aspect ratio cropping supports native size, specified pixels and custom ratios',async()=>{
+        await run('document.querySelector("#resize-mode-ratio").click()');
+        await run(`Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='16:9').click()`);
+        let result=await generate();assert.equal(result.width*9,result.height*16);
+        await select('#resize-ratio-output','width');await field('#resize-ratio-output-width',1920);
+        result=await generate();assert.equal(result.width,1920);assert.equal(result.height,1080);
+        await run(`Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='自定义').click()`);
+        await field('#resize-ratio-width',5);await field('#resize-ratio-height',4);await field('#resize-ratio-output-width',500);
+        result=await generate();assert.equal(result.width,500);assert.equal(result.height,400);
+      });
+      await test('batch percentage scaling calculates each source independently',async()=>{
+        const portrait=await sharp({create:{width:200,height:400,channels:3,background:'#00ff00'}}).png().toBuffer();
+        await run(`(()=>{const d=new DataTransfer();d.items.add(new File([Uint8Array.from(atob('${portrait.toString('base64')}'),c=>c.charCodeAt(0))],'portrait.png',{type:'image/png'}));document.body.dispatchEvent(new ClipboardEvent('paste',{bubbles:true,cancelable:true,clipboardData:d}));})()`);
+        await waitFor('document.querySelectorAll("[aria-label=待处理图片] > div").length===3','mixed-size inputs');
+        await run('document.querySelector("#resize-mode-scale").click()');await field('#resize-percent',50);
+        await run('document.querySelector("#resize-generate-all").click()');
+        await waitFor('document.querySelector("#resize-status").textContent.includes("成功 3 张")','mixed batch',400);
+        const history=await run('window.stats.getRecentImages(3)');
+        assert.deepEqual(history.images.map(i=>`${i.width}x${i.height}`).sort(),['100x200','200x150','200x150']);
+      });
+      await test('compression is optional, shares color strategy and never changes the required pixels',async()=>{
+        const lossless=await resize({width:300,height:200,fit:'stretch',format:'png',compressionEnabled:false},undefined,input);
+        const reduced=await resize({width:300,height:200,fit:'stretch',format:'png',compressionEnabled:true,optimizeColors:true,quality:20},undefined,input);
+        assert.equal(lossless.success,true,lossless.error);assert.equal(reduced.success,true,reduced.error);
+        assert.ok(reduced.image.compressedSize<lossless.image.compressedSize);
+        const limited=await resize({width:300,height:200,fit:'stretch',format:'jpeg',compressionEnabled:true,quality:90,targetSizeKB:20},undefined,input);
+        assert.equal(limited.success,true,limited.error);assert.equal(limited.image.targetMet,true);
+        assert.ok(limited.image.compressedSize<20*1024);assert.equal(limited.image.width,300);assert.equal(limited.image.height,200);
+        const impossible=await resize({compressionEnabled:true,targetSizeKB:1},undefined,input);
+        assert.equal(impossible.success,true,impossible.error);assert.equal(impossible.image.targetMet,false);assert.ok(impossible.image.warning.includes('保持指定像素'));
+        assert.equal(impossible.image.width,150);assert.equal(impossible.image.height,200);
+        assert.equal((await resize({compressionEnabled:false,targetSizeKB:20})).success,false);
+        await run('document.querySelector("#resize-mode-dimensions").click()');await select('#resize-dimension-policy','exact');await run('document.querySelector("#resize-pixels-150x200").click()');
+        await select('#resize-format','png');await run('document.querySelector("#resize-compression-enabled").click()');
+        await run(`Array.from(document.querySelectorAll('button')).find(b=>b.textContent.includes('套用“图片压缩”')).click()`);await sleep(100);
+        const shared=await run('window.compression.getCompressionSettings()');
+        assert.equal(await run('document.querySelector("#resize-quality").value'),String(100-shared.settings.quality));
+        assert.equal(await run('document.querySelector("#resize-format").value'),'png');
+        const textured=await sharp(input).resize(400,300).png().toBuffer();
+        await run(`(()=>{const d=new DataTransfer();d.items.add(new File([Uint8Array.from(atob('${textured.toString('base64')}'),c=>c.charCodeAt(0))],'texture.png',{type:'image/png'}));document.body.dispatchEvent(new ClipboardEvent('paste',{bubbles:true,cancelable:true,clipboardData:d}));})()`);
+        await waitFor('document.querySelectorAll("[aria-label=待处理图片] > div").length===4','textured input');
+        await select('#resize-png-colors','preserve');
+        await run('document.querySelector("#resize-target-enabled").click()');await field('#resize-target-size',1);
+        const generated=await generate();assert.equal(generated.targetMet,false);assert.equal(generated.width,150);assert.equal(generated.height,200);
+        assert.ok((await run('document.querySelector("#resize-status").textContent')).includes('未达到文件大小要求'));
+        await run('document.querySelector("#resize-compression-enabled").click()');
+        assert.equal(await run('!!document.querySelector("#resize-target-size")'),false);
+        assert.equal(JSON.parse(await run('localStorage.getItem("resizeSettings")')).targetEnabled,false);
+        assert.deepEqual(await run('window.testAlerts'),[]);
       });
     } catch (error) { failures++; console.error(error); }
     clearTimeout(timer);

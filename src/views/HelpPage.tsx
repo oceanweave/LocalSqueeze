@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Button } from '../components/ui';
 import { Search, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
+import { version } from '../../package.json';
 
 const HelpPage: React.FC = () => {
   // 状态管理
@@ -143,10 +144,11 @@ const HelpPage: React.FC = () => {
         <p className="text-muted-foreground">获取图片压缩、证件照裁剪与像素调整的使用帮助。</p>
         <div className="mt-4 rounded-lg border border-border bg-card p-4 text-sm space-y-2">
           <p className="font-semibold">图片尺寸处理</p>
-          <p>侧边栏按“图片压缩”和“图片尺寸处理”分组。进入“尺寸与裁剪”，选择一寸、二寸、护照或国考参考预设，也可输入 150 × 200 等自定义像素。</p>
+          <p>侧边栏按“图片压缩”和“图片尺寸处理”分组。进入“尺寸与裁剪”，先选择收到的要求：一寸、二寸、护照等选“证件照”；明确的像素或毫米、厘米宽高选“指定宽高”；4:3、16:9 等选“固定比例”；整图缩小到一半选“按百分比缩放”。</p>
           <p>支持选图、拖入、粘贴和文件夹导入。拖动裁剪框移动选区，拖动边角缩放，方向键可微调。每张图片保留各自裁剪框，可逐张生成或批量生成。</p>
-          <p>“等比留白”保留全图，“拉伸铺满”可能改变比例。生成结果可直接保存，或在尺寸处理的“导出管理”批量导出。两个工具的结果分别显示，切换页面不会清空当前尺寸处理工作台。</p>
-          <p>预设只处理尺寸，不自动换背景或审核人像；国考照片仍须使用官方审核工具。数字照与纸质照规格可能不同，请查看预设旁的来源。DPI 影响打印尺寸，不自动改变像素宽高。</p>
+          <p>只指定宽度或高度时会自动计算另一边；“不超过指定宽高”会保留原比例且不放大。宽高都指定时，可裁剪多余部分、留白保留全图或拉伸。生成结果可直接保存，或在尺寸处理的“导出管理”批量导出。两个工具的结果分别显示，切换页面不会清空当前尺寸处理工作台。</p>
+          <p>保存格式可选 JPG、PNG、WebP。“同时压缩”可选开启，可套用图片压缩模块的当前参数，并设置小于 200 KB 等体积要求。压缩不缩小本页指定像素；无法达标会显示提示。关闭压缩时优先画质，裁剪、缩放和格式转换仍需重新编码。</p>
+          <p>预设只处理尺寸，不自动换背景或审核人像；国考照片仍须使用官方审核工具。数字照与纸质照规格可能不同，请查看预设旁的来源。DPI 放在默认折叠的高级设置，一般不用修改。打印尺寸会自动换算像素；纯像素模式不会因 DPI 改变像素。</p>
         </div>
       </div>
 
@@ -402,7 +404,7 @@ const HelpPage: React.FC = () => {
           
           <div className="mt-8 pt-4 border-t border-border">
             <h3 className="text-lg font-bold mb-2">关于</h3>
-            <p>© 2025 图片压缩工具 v1.0.0</p>
+            <p>© {new Date().getFullYear()} LocalSqueeze 图片工具 v{version}</p>
           </div>
         </div>
       )}

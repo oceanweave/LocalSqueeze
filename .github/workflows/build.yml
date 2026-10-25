@@ -44,6 +44,8 @@ jobs:
         run: npm ci
       - name: Check TypeScript
         run: npm run type-check
+      - name: Verify resize requirements
+        run: npm run test:resize-requirements
       - name: Verify installer configuration
         run: node tests/release-config.cjs
       - name: Build installers

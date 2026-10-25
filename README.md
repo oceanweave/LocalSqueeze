@@ -172,3 +172,21 @@ src/
 规格参考：[一寸及考试照片](https://rsj.beijing.gov.cn/ywsite/bjpta/fwzn/cjwt/bm/cz/qgpt/202108/t20210821_2473438.html)、[2027 国考指南](https://shanghai.chinatax.gov.cn/xxgk/rsxx/202610/t481764.html)、[护照纸质照片](https://pg.china-embassy.gov.cn/lsyw/lszj/hzlxz/hzlzyq/202401/t20240103_11216467.html)、[护照数字照片](https://dj.china-embassy.gov.cn/lsfw/linshizhengjian/huzhaolvxingzheng/202311/P020231126826793735884.pdf)、[美国签证数字照片](https://travel.state.gov/content/travel/en/us-visas/visa-information-resources/photos.html)。
 
 裁剪交互使用 [React Image Crop 11.1.2](https://www.npmjs.com/package/react-image-crop)，ISC 许可，声明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。像素输出复用项目现有 Sharp 依赖。
+
+
+### 按要求配置（v1.2.0）
+
+| 收到的要求 | 选择的方式 | 需要填写 |
+| --- | --- | --- |
+| 一寸、二寸、护照、国考照片 | 证件照 / 一寸二寸 | 选择预设并调整裁剪框 |
+| 150×200 像素、3×4 厘米 | 指定宽高 / 像素 | 选择单位，填写宽高 |
+| 只要求宽度或高度 | 指定宽高 / 像素 | 选择只指定一边，另一边自动计算 |
+| 不超过 800×600 像素 | 指定宽高 / 像素 | 选择最大宽高范围，不裁剪、不放大 |
+| 4:3、16:9、9:16、正方形 | 固定比例裁剪 | 选择比例，可额外指定输出宽度 |
+| 整张图缩小到 50% | 按百分比缩放 | 输入百分比，批量时逐张计算 |
+
+DPI 默认放在折叠的高级设置中。毫米／厘米及纸质照片预设按 DPI 自动计算像素，保持打印宽高；纯像素、比例、百分比模式不受 DPI 影响。比例裁剪默认尽量使用选区原像素，选区输出取整数比例；另行指定输出宽度时，高度四舍五入到整数像素。
+
+保存格式可直接选择 JPG、PNG、WebP。“同时压缩”默认关闭，关闭时优先画质（JPEG 质量 100、PNG 不减色、WebP 无损）；裁剪、缩放或转换仍需重新编码。开启后可套用压缩模块当前的强度和颜色策略，同时指定文件体积。尺寸与格式以本页为准，不套用压缩模块的自动缩小尺寸选项。严格保持目标像素，无法满足体积要求会显示警告。PNG 保色模式隐藏无效的强度滑块。
+
+交互参考：[Adobe Express 预设比例与自定义宽高](https://experienceleague.adobe.com/en/docs/journey-optimizer-b2b/user/content-management/assets/internal-dam/image-edit-adobe-express)、[Canva 图片尺寸工具](https://www.canva.com/features/image-resizer/)。

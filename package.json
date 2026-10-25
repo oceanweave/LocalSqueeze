@@ -1,7 +1,7 @@
 {
   "name": "@freeany/local-squeeze",
   "productName": "LocalSqueeze",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Local Image Compression Tool",
   "main": ".vite/build/main.js",
   "scripts": {
@@ -32,7 +32,8 @@
     "release:patch": "npm version patch && git push --follow-tags",
     "release:minor": "npm version minor && git push --follow-tags",
     "release:major": "npm version major && git push --follow-tags",
-    "test:regression": "node scripts/test-regression.cjs"
+    "test:regression": "node scripts/test-regression.cjs",
+    "test:resize-requirements": "node tests/resize-requirements.cjs"
   },
   "keywords": [],
   "author": {

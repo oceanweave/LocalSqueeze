@@ -3,6 +3,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { randomUUID } from 'crypto';
 import { app, ipcMain } from 'electron';
+import { encodeImage } from '../compression/encoder';
 import { validDimensions, type CropRegion, type ResizeSettings } from '../../lib/resize-settings';
 
 const inputOptions = { limitInputPixels: 100000000, failOn: 'error' as const };
@@ -35,6 +36,8 @@ export function initResizeHandlers() {
       if (!['jpeg', 'png', 'webp'].includes(settings.format)) throw new Error('请选择 JPEG、PNG 或 WebP 输出');
       if (!/^#[0-9a-f]{6}$/i.test(settings.background)) throw new Error('无效的填充颜色');
       if (!Number.isInteger(settings.quality) || settings.quality < 1 || settings.quality > 100) throw new Error('质量须为 1–100 的整数');
+      if (settings.targetSizeKB !== undefined && (!Number.isFinite(settings.targetSizeKB) || settings.targetSizeKB < 1)) throw new Error('文件大小上限至少为 1 KB');
+      if (settings.targetSizeKB !== undefined && settings.compressionEnabled === false) throw new Error('限制文件大小需要开启同时压缩');
       const originalSize = (await fs.stat(imagePath)).size;
       const metadata = await sharp(imagePath, inputOptions).metadata();
       const swapped = (metadata.orientation || 1) >= 5;
@@ -59,9 +62,9 @@ export function initResizeHandlers() {
       const pixels = await image.toColourspace('srgb').raw().toBuffer({ resolveWithObject: true });
       image = sharp(pixels.data, { raw: { width: pixels.info.width, height: pixels.info.height, channels: pixels.info.channels } })
         .withMetadata({ density: settings.dpi });
-      if (settings.format === 'jpeg') image = image.flatten({ background: settings.background }).jpeg({ quality: settings.quality, mozjpeg: true });
-      if (settings.format === 'png') image = image.png({ compressionLevel: 9, adaptiveFiltering: true, palette: false });
-      if (settings.format === 'webp') image = image.webp({ quality: settings.quality });
+      const quality = settings.compressionEnabled === false ? 100 : settings.quality;
+      // Explicitly disabling extra compression favours fidelity; resized JPEG still requires encoding.
+      if (settings.format === 'jpeg') image = image.flatten({ background: settings.background });
       const id = randomUUID();
       const extension = settings.format === 'jpeg' ? 'jpg' : settings.format;
       const base = Array.from(path.parse(path.basename(args.name || imagePath)).name.replace(/[\\/:*?"<>|]/g, '_')).slice(0, 50).join('') || 'image';
@@ -69,11 +72,33 @@ export function initResizeHandlers() {
       const directory = path.join(app.getPath('userData'), 'resized-images', id);
       await fs.mkdir(directory, { recursive: true });
       const outputPath = path.join(directory, name);
-      const info = await image.toFile(outputPath);
+      let targetMet: boolean | undefined;
+      const warnings: string[] = (metadata.pages || 1) > 1 ? ['仅处理了第一帧'] : [];
+      if (settings.compressionEnabled === true || settings.targetSizeKB !== undefined) {
+        const intermediate = path.join(directory, '.resize-source.png');
+        try {
+          await image.png({ palette: false }).toFile(intermediate);
+          const encoded = await encodeImage(intermediate, outputPath, {
+            quality, keepDimensions: true, keepFormat: false, outputFormat: settings.format,
+            removeMetadata: false, optimizeColors: settings.optimizeColors === true, progressive: false,
+            targetSizeKB: settings.targetSizeKB, targetAllowResize: false
+          });
+          if (!encoded.success) throw new Error(encoded.error || '压缩失败');
+          targetMet = encoded.targetMet;
+          if (targetMet === false) warnings.push(`未达到小于 ${settings.targetSizeKB} KB 的要求，已保持指定像素。可改用 JPG / WebP、开启 PNG 减色或提高体积上限。`);
+        } finally { await fs.unlink(intermediate).catch(() => undefined); }
+      } else {
+        if (settings.format === 'jpeg') image = image.jpeg({ quality, mozjpeg: true });
+        if (settings.format === 'png') image = image.png({ compressionLevel: 9, adaptiveFiltering: true, palette: false });
+        if (settings.format === 'webp') image = image.webp(settings.compressionEnabled === false ? { lossless: true } : { quality });
+        await image.toFile(outputPath);
+      }
+      const info = await sharp(outputPath).metadata();
+      const outputSize = (await fs.stat(outputPath)).size;
       return { success: true, image: { id, name, originalPath: imagePath, outputPath, originalSize,
-        compressedSize: info.size, compressionRate: `${((originalSize - info.size) / originalSize * 100).toFixed(1)}%`,
+        compressedSize: outputSize, compressionRate: `${((originalSize - outputSize) / originalSize * 100).toFixed(1)}%`,
         width: info.width, height: info.height, format: settings.format, processedAt: Date.now(), operation: 'resize',
-        warning: (metadata.pages || 1) > 1 ? '仅处理了第一帧' : undefined } };
+        targetMet, warning: warnings.length ? warnings.join('；') : undefined } };
     } catch (error) { return { success: false, error: error instanceof Error ? error.message : '尺寸处理失败' }; }
   });
 }
