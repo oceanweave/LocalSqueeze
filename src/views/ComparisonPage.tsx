@@ -19,11 +19,12 @@ export default function ComparisonPage() {
         
         // 直接从主进程获取最近处理的图片
         if (window.stats) {
-          const recentImages = await window.stats.getRecentImages(5);
+          const recentImages = await window.stats.getRecentImages(1000);
           
-          if (recentImages && recentImages.success && recentImages.images && recentImages.images.length > 0) {
+          const images = recentImages.images?.filter(image => (image.operation || 'compression') === 'compression').slice(0, 5) || [];
+          if (recentImages.success && images.length > 0) {
             // 将 ProcessedImage 转换为 CompressionResult 格式
-            const convertedResults: CompressionResult[] = recentImages.images.map(img => ({
+            const convertedResults: CompressionResult[] = images.map(img => ({
               success: true,
               originalPath: img.originalPath,
               outputPath: img.outputPath,

@@ -6,6 +6,8 @@ import CompressionSettings from '../views/CompressionSettings';
 import ComparisonPage from '../views/ComparisonPage';
 import ExportPage from '../views/ExportPage';
 import HelpPage from '../views/HelpPage';
+import PdfCompressionPage from '../views/PdfCompressionPage';
+import { PdfWorkspaceProvider } from '../contexts/PdfWorkspace';
 import ImageResizePage from '../views/ImageResizePage';
 import { ResizeWorkspaceProvider } from '../contexts/ResizeWorkspace';
 
@@ -17,7 +19,7 @@ export default function App() {
   const RouterComponent = isProduction ? HashRouter : Router;
   
   return (
-    <ResizeWorkspaceProvider>
+    <ResizeWorkspaceProvider><PdfWorkspaceProvider>
       <RouterComponent>
         <Routes>
           <Route path="/" element={<MainLayout />}>
@@ -28,10 +30,12 @@ export default function App() {
             <Route path="export" element={<ExportPage key="compression-export" operation="compression" />} />
             <Route path="resize" element={<ImageResizePage />} />
             <Route path="resize/export" element={<ExportPage key="resize-export" operation="resize" />} />
+            <Route path="pdf" element={<PdfCompressionPage />} />
+            <Route path="pdf/export" element={<ExportPage key="pdf-export" operation="pdf" />} />
             <Route path="help" element={<HelpPage />} />
           </Route>
         </Routes>
       </RouterComponent>
-    </ResizeWorkspaceProvider>
+    </PdfWorkspaceProvider></ResizeWorkspaceProvider>
   );
 }

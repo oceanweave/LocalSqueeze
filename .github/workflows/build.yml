@@ -46,10 +46,15 @@ jobs:
         run: npm run type-check
       - name: Verify resize requirements
         run: npm run test:resize-requirements
+      - name: Verify PDF compression
+        run: npm run test:pdf
       - name: Verify installer configuration
         run: node tests/release-config.cjs
       - name: Build installers
         run: npm run make -- --platform=${{ matrix.platform }} --arch=${{ matrix.arch }} --targets=${{ matrix.targets }}
+      - name: Verify bundled PDF runtime
+        # Run the bundled WASM on every OS before publishing its installers.
+        run: node scripts/verify-pdf-runtime.cjs ${{ matrix.platform }} ${{ matrix.arch }}
       - name: Prepare release assets
         run: node scripts/prepare-release.cjs ${{ matrix.platform }} ${{ matrix.arch }}
       - uses: actions/upload-artifact@v4

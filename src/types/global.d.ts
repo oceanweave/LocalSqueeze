@@ -42,7 +42,8 @@ export interface CompressionResult {
 
 // 处理后的图片信息
 export interface ProcessedImage {
-  operation?: 'compression' | 'resize';
+  operation?: 'compression' | 'resize' | 'pdf';
+  pageCount?: number;
   id: string;
   name: string;
   originalPath: string;
@@ -164,4 +165,9 @@ declare module '*.svg' {
 declare module '*.gif' {
   const value: string;
   export default value;
+}
+
+declare module '*?raw' {
+  const content: string;
+  export default content;
 }

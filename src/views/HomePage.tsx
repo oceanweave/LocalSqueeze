@@ -126,7 +126,7 @@ export default function HomePage() {
           const formattedImages: ImageItem[] = [];
           
           // 处理每张图片
-          for (const img of recentResponse.images.filter(image => image.operation !== 'resize').slice(0, 4)) {
+          for (const img of recentResponse.images.filter(image => (image.operation || 'compression') === 'compression').slice(0, 4)) {
             try {
               // 已删除日志
               // 获取缩略图
@@ -257,7 +257,7 @@ export default function HomePage() {
       
       // 处理最近图片数据
       if (recentResponse && recentResponse.success && Array.isArray(recentResponse.images)) {
-        Promise.all(recentResponse.images.filter(image => image.operation !== 'resize').slice(0, 4).map(async (img) => {
+        Promise.all(recentResponse.images.filter(image => (image.operation || 'compression') === 'compression').slice(0, 4).map(async (img) => {
           try {
             const thumbnail = await window.electron.ipcRenderer.invoke('get-image-data-url', img.outputPath);
             return {

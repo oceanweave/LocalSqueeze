@@ -190,3 +190,19 @@ DPI 默认放在折叠的高级设置中。毫米／厘米及纸质照片预设�
 保存格式可直接选择 JPG、PNG、WebP。“同时压缩”默认关闭，关闭时优先画质（JPEG 质量 100、PNG 不减色、WebP 无损）；裁剪、缩放或转换仍需重新编码。开启后可套用压缩模块当前的强度和颜色策略，同时指定文件体积。尺寸与格式以本页为准，不套用压缩模块的自动缩小尺寸选项。严格保持目标像素，无法满足体积要求会显示警告。PNG 保色模式隐藏无效的强度滑块。
 
 交互参考：[Adobe Express 预设比例与自定义宽高](https://experienceleague.adobe.com/en/docs/journey-optimizer-b2b/user/content-management/assets/internal-dam/image-edit-adobe-express)、[Canva 图片尺寸工具](https://www.canva.com/features/image-resizer/)。
+
+### PDF 压缩（v1.3.0）
+
+侧边栏新增独立的 **PDF 压缩 → 导入与压缩 / 导出管理**。可选择多个 PDF、拖入文件，或导入文件夹中的 PDF（不递归子目录）。单个文件上限 150 MB，按顺序处理，某个文件失败不影响其余文件。
+
+- **无损整理**：压缩内部对象和数据流，不重新编码图片。适合文字、矢量图和画质敏感文件。
+- **均衡压缩**（默认）：内嵌图片 JPEG 质量 75，适合常见文档、扫描件。
+- **强力压缩**：内嵌图片 JPEG 质量 45，优先减小体积，图片可能出现失真。
+- **自定义**：内嵌图片质量 20–95；数值是图片质量，不是预期体积减少百分比。
+- **目标体积**：可选设置每个 PDF 小于多少 MB；均衡/强力/自定义会继续尝试更低质量至 20，无损模式只整理结构。不能保证达标，未达标明确提示。
+
+采用 [QPDF](https://qpdf.readthedocs.io/en/stable/cli.html#optimizing-file-size) 的本地 WASM 版本（QPDF 12.2.0，封装包 [@neslinesli93/qpdf-wasm 0.3.0](https://www.npmjs.com/package/@neslinesli93/qpdf-wasm)），随应用打包，无需安装外部程序；Mac / Windows 共用实现。仅对适用的内嵌图片进行重编码，保留页面尺寸、文字、矢量、链接和表单，不整页栅格化、不自动 OCR、不缩减图片像素。纯文字、已压缩图片或特殊图像编码的 PDF 可能减小不明显；若结果更大则导出原文件内容的副本。
+
+当前拒绝加密、数字签名/签名字段、结构异常 PDF，避免产生无效签名或不完整文件。原文件不覆盖，所有成功结果均可在系统阅读器中预览、另存为或批量导出；历史和图片统计分离。特殊印刷、PDF/A、PDF/X 文件不保证保留其认证，请保留原件并验证。
+
+开发验证：`npm run test:pdf`（含图片/文字/矢量/表单/链接/页数/体积/异常处理），`npm run test:pdf-ui`（真实 Electron 导入、处理、导出及隔离检查）。许可证见 THIRD_PARTY_NOTICES.md 和 licenses/。

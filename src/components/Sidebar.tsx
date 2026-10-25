@@ -11,7 +11,7 @@ export default function Sidebar() {
     if (current) setCollapsed(previous => ({ ...previous, [current.id]: false }));
   }, [pathname]);
   return <div className="p-3 h-full bg-secondary/50 dark:bg-muted">
-    <nav aria-label="图片工具导航" className="space-y-5">
+    <nav aria-label="本地工具导航" className="space-y-5">
       {toolNavigation.map(group => <div key={group.id}>
         <button className={'flex w-full items-center gap-2 rounded-lg px-3 py-3 text-sm font-semibold hover:bg-primary/10 ' + (group.paths.includes(pathname) ? 'text-primary' : '')}
           aria-expanded={!collapsed[group.id]} aria-controls={`menu-${group.id}`}
@@ -27,6 +27,6 @@ export default function Sidebar() {
       </div>)}
       <Link to="/help" aria-current={pathname === '/help' ? 'page' : undefined} className={'flex items-center gap-2 rounded-lg px-3 py-3 text-sm font-medium ' + (pathname === '/help' ? 'bg-primary text-primary-foreground' : 'hover:bg-primary/10')}><HelpCircle size={19} />使用帮助</Link>
     </nav>
-    <div className="mt-7 border-t border-border pt-4 px-2 text-xs text-muted-foreground leading-6"><p className="font-medium text-foreground">LocalSqueeze 图片工具</p><p>压缩 · 裁剪 · 调整尺寸</p><p>本机处理，图片无需上传</p></div>
+    <div className="mt-7 border-t border-border pt-4 px-2 text-xs text-muted-foreground leading-6"><p className="font-medium text-foreground">LocalSqueeze 本地文件工具</p><p>图片压缩 · 尺寸处理 · PDF 压缩</p><p>本机处理，文件无需上传</p></div>
   </div>;
 }

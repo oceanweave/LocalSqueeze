@@ -39,10 +39,10 @@ export default function MainLayout() {
           <div className="text-2xl font-bold flex items-center gap-2">
             <img 
               src={iconImage} 
-              alt="LocalSqueeze 图片工具"
+              alt="LocalSqueeze 本地文件工具"
               className="w-8 h-8 object-contain transition-all duration-300 hover:scale-110" 
             />
-            LocalSqueeze 图片工具
+            LocalSqueeze 本地文件工具
           </div>
           <ThemeToggle isDarkMode={isDarkMode} onToggle={toggleTheme} />
         </header>
@@ -65,7 +65,7 @@ export default function MainLayout() {
         {/* 页脚 */}
         <footer className="bg-muted py-4 px-6 text-center text-sm text-muted-foreground border-t border-border mt-auto">
           <div className="flex justify-center items-center gap-2">
-            <span>LocalSqueeze 图片工具 v{version} © {new Date().getFullYear()}</span>
+            <span>LocalSqueeze 本地文件工具 v{version} © {new Date().getFullYear()}</span>
             <span className="inline-block w-1 h-1 rounded-full bg-primary"></span>
             <span>高效 · 简洁 · 专业</span>
           </div>

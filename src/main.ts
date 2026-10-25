@@ -296,7 +296,9 @@ app.on('ready', async () => {
       const result = await dialog.showSaveDialog({
         defaultPath: suggestedName,
         filters: [
-          { name: '图片', extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif'] },
+          path.extname(sourcePath).toLowerCase() === '.pdf'
+            ? { name: 'PDF 文档', extensions: ['pdf'] }
+            : { name: '图片', extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif'] },
           { name: '所有文件', extensions: ['*'] }
         ]
       });

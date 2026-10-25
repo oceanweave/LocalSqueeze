@@ -8,8 +8,9 @@ import { PublisherGithub } from '@electron-forge/publisher-github';
 
 const config: ForgeConfig = {
   packagerConfig: {
+    extraResource: ['THIRD_PARTY_NOTICES.md', 'licenses'],
     "asar": {
-      "unpack": "**/node_modules/{sharp,@img}/**/*"
+      "unpack": "**/node_modules/{sharp,@img,@neslinesli93}/**/*"
     },
     icon: './src/assets/icons/icon' // 不需要扩展名，Electron Forge会根据平台自动选择
     // 不进行macOS应用签名和公证
@@ -149,7 +150,7 @@ const config: ForgeConfig = {
     {
       name: "@timfish/forge-externals-plugin",
       config: {
-        "externals": ["sharp"],
+        "externals": ["sharp", "@neslinesli93/qpdf-wasm"],
         "includeDeps": true
       }
     },

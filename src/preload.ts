@@ -214,7 +214,11 @@ const validChannels = [
   'read-file-as-buffer',
   'prepare-resize-image',
   'get-image-thumbnail',
-  'resize-image'
+  'resize-image',
+  'select-pdf-files',
+  'get-pdfs-from-folder',
+  'compress-pdf',
+  'pdf-compression-progress'
 ];
 
 // 暴露IPC通信API

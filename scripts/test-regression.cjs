@@ -17,12 +17,12 @@ async function main() {
         outDir: '.vite/build',
         emptyOutDir: false,
         lib: { entry: `src/${entry}.ts`, formats: ['cjs'], fileName: () => `${entry}.js` },
-        rollupOptions: { external: ['electron', 'sharp', ...builtinModules] }
+        rollupOptions: { external: ['electron', 'sharp', '@neslinesli93/qpdf-wasm', ...builtinModules, ...builtinModules.map(name => `node:${name}`)] }
       }
     });
   }
   await build({ configFile: 'vite.renderer.config.ts', base: './', build: { outDir: '.vite/renderer/main_window' } });
-  const result = spawnSync(require('electron'), [path.join(root, 'tests/regression.electron.cjs')], {
+  const result = spawnSync(require('electron'), [path.join(root, 'tests', process.argv[2] || 'regression.electron.cjs')], {
     stdio: 'inherit', env: { ...process.env, NODE_ENV: 'test' }
   });
   process.exitCode = result.status ?? 1;

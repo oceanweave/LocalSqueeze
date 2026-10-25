@@ -9,7 +9,8 @@ import { existsSync } from 'fs';
 
 // 定义数据结构类型
 export interface ProcessedImage {
-  operation?: 'compression' | 'resize';
+  operation?: 'compression' | 'resize' | 'pdf';
+  pageCount?: number;
   id: string;
   name: string;
   originalPath: string;
@@ -209,8 +210,8 @@ export class StorageManager {
    * 添加处理记录
    */
   public async addProcessedImage(image: ProcessedImage): Promise<void> {
-    // Resize results share export history, while compression statistics retain their meaning.
-    if (image.operation === 'resize') {
+    // Other tools share export history without changing image compression statistics.
+    if (image.operation === 'resize' || image.operation === 'pdf') {
       this.history.unshift(image);
       this.history = this.history.slice(0, 1000);
       await this.saveHistory();
@@ -220,7 +221,7 @@ export class StorageManager {
     // 添加到历史记录
     this.history.unshift(image);
     
-    // Retain history for both tools; each export view shows its recent 100 records.
+    // Retain history for all tools; each export view shows its recent 100 records.
     if (this.history.length > 1000) {
       this.history = this.history.slice(0, 1000);
     }
